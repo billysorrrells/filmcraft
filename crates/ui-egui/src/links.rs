@@ -7,23 +7,23 @@
 pub const APP: &str = "filmcraft";
 
 /// The ArtCraft community Discord.
-pub const DISCORD: &str = "https://discord.gg/artcraft";
+pub const DISCORD: &str = "https://billysorrells.com/billotech/free/";
 /// The ArtCraft website.
-pub const WEBSITE: &str = "https://getartcraft.com";
+pub const WEBSITE: &str = "https://billysorrells.com/billotech/";
 /// FilmCraft's page on the ArtCraft website.
-pub const APP_PAGE: &str = "https://getartcraft.com/apps/filmcraft";
+pub const APP_PAGE: &str = "https://billysorrells.com/billotech/#toolkit";
 /// FilmCraft's source repository.
-pub const GITHUB: &str = "https://github.com/storytold/filmcraft";
+pub const GITHUB: &str = "https://billysorrells.com/billotech/free/";
 /// New issue on FilmCraft's repository.
-pub const ISSUES: &str = "https://github.com/storytold/filmcraft/issues";
+pub const ISSUES: &str = "mailto:bookbillysorrells@gmail.com?subject=Billo%20Cut%20feedback";
 
 /// (command id, label, url) for every link, in menu order.
 pub const ALL: [(&str, &str, &str); 5] = [
-    ("help.discord", "Join the ArtCraft Discord…", DISCORD),
-    ("help.website", "ArtCraft Website", WEBSITE),
-    ("help.appPage", "FilmCraft on getartcraft.com", APP_PAGE),
-    ("help.github", "FilmCraft on GitHub", GITHUB),
-    ("help.reportIssue", "Report an Issue…", ISSUES),
+    ("help.discord", "BilloTech Toolkit…", DISCORD),
+    ("help.website", "BilloTech", WEBSITE),
+    ("help.appPage", "Billo Cut on billysorrells.com/billotech", APP_PAGE),
+    ("help.github", "Agent access", GITHUB),
+    ("help.reportIssue", "Send feedback…", ISSUES),
 ];
 
 /// A link the web browser couldn't open (`ui.failedLink`): the address and the reason.
@@ -49,7 +49,7 @@ pub fn menu_hint(command: &str) -> Option<String> {
         match command {
             "help.revealLogFiles" => tl!("Saves this session's log and shows it in your file manager."),
             "help.systemCompatibilityReport" => tl!("Shows a report on this computer."),
-            "app.about" => tl!("Shows the version, community links and credits in a FilmCraft window."),
+            "app.about" => tl!("Shows the version, community links and credits in a Billo Cut window."),
             _ => return None,
         }
         .to_string(),
