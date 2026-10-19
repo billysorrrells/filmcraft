@@ -264,7 +264,7 @@ mod tests {
                 gpu("Microsoft Basic Render Driver", Dx12, Cpu, 0x1414, 0x8c, "", "10.0.26100.1", "", 36),
             ],
             // one GPU through two different drivers, the second exposing more: Linux with AMDVLK and RADV
-            vec![radeon("0000:03:00.0", "AMD open-source driver", 58), radeon("0000:03:00.0", "radv", 71)],
+            vec![radeon("0000:03:00.0", "AMD BilloTech driver", 58), radeon("0000:03:00.0", "radv", 71)],
             // a vendor's driver and Dozen (Vulkan on DirectX 12)
             vec![nvidia(Vulkan, "", "Dozen", 75), nvidia(Vulkan, "0000:01:00.0", "NVIDIA", 70)],
             // two cards of one model, on their own buses

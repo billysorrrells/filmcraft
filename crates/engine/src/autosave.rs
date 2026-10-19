@@ -493,7 +493,7 @@ pub fn portable_data_dir(exe_dir: &Path) -> Option<PathBuf> {
 /// elsewhere `$XDG_DATA_HOME/filmcraft` or `~/.local/share/filmcraft`.
 pub fn default_data_dir() -> Option<PathBuf> {
     let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
-    if let Some(d) = env("FILMCRAFT_DATA_DIR") {
+    if let Some(d) = env("BILLO CUT_DATA_DIR") {
         return Some(d);
     }
     if let Some(d) = std::env::current_exe().ok().and_then(|exe| exe.parent().and_then(portable_data_dir)) {

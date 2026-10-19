@@ -8,7 +8,7 @@
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=../../assets/app-icon/filmcraft.ico");
-    println!("cargo:rerun-if-env-changed=FILMCRAFT_REQUIRE_WINRES");
+    println!("cargo:rerun-if-env-changed=BILLO CUT_REQUIRE_WINRES");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
     }
@@ -26,7 +26,7 @@ mod windows {
             .set("OriginalFilename", "filmcraft.exe")
             .set("InternalName", "filmcraft");
         if let Err(e) = res.compile() {
-            if std::env::var_os("FILMCRAFT_REQUIRE_WINRES").is_some() {
+            if std::env::var_os("BILLO CUT_REQUIRE_WINRES").is_some() {
                 panic!("embedding Windows resources failed: {e}");
             }
             println!("cargo:warning=filmcraft.exe built without icon/version resources: {e}");

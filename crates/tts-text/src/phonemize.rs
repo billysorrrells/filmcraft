@@ -1427,8 +1427,8 @@ PERCENT  P ER0 S EH1 N T
     /// accuracy and phoneme error rate on the held-out words.
     #[test]
     fn measured_accuracy_against_cmudict() {
-        let Ok(path) = std::env::var("FILMCRAFT_CMUDICT") else {
-            eprintln!("measured_accuracy_against_cmudict: FILMCRAFT_CMUDICT not set; skipping");
+        let Ok(path) = std::env::var("BILLO CUT_CMUDICT") else {
+            eprintln!("measured_accuracy_against_cmudict: BILLO CUT_CMUDICT not set; skipping");
             return;
         };
         let Ok(bytes) = std::fs::read(&path) else {

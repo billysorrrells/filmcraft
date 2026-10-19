@@ -80,7 +80,7 @@ fn main() -> eframe::Result {
     // First, so the panic hook and every start-up record are logged (`logging`).
     let logger = logging::install();
     // lossy, so a value that is not Unicode is reported like any other bad port instead of ignored
-    let env_port = std::env::var_os("FILMCRAFT_CONTROL_PORT").map(|p| p.to_string_lossy().into_owned());
+    let env_port = std::env::var_os("BILLO CUT_CONTROL_PORT").map(|p| p.to_string_lossy().into_owned());
     let launch = match args::parse(env_port, std::env::args_os().skip(1)) {
         Ok(Cli::Run(l)) => l,
         Ok(Cli::Help) => {
@@ -107,7 +107,7 @@ fn main() -> eframe::Result {
             Some(Err(e)) => log::warn!("no log file: {e}"),
             None => {
                 logger.stderr_only();
-                log::warn!("no log file: no data directory (set FILMCRAFT_DATA_DIR or --data-dir)");
+                log::warn!("no log file: no data directory (set BILLO CUT_DATA_DIR or --data-dir)");
             }
         }
     }
@@ -253,7 +253,7 @@ fn app_creator(launch: Launch, graphics: graphics::GraphicsStart, created: Arc<A
         }
         app.integrated_titlebar = cfg!(target_os = "macos");
         if let Some(rs) = cc.wgpu_render_state.clone()
-            && std::env::var_os("FILMCRAFT_CPU_COMPOSITE").is_none()
+            && std::env::var_os("BILLO CUT_CPU_COMPOSITE").is_none()
         {
             app.set_wgpu(rs);
         }

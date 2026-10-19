@@ -979,7 +979,7 @@ mod tests {
         h.get_by_label("Appearance").click_secondary();
         h.run_steps(3);
         assert!(h.query_by_label("Appearance Settings…").is_some());
-        if let Some(path) = std::env::var_os("FILMCRAFT_FAVORITES_SCREENSHOT") {
+        if let Some(path) = std::env::var_os("BILLO CUT_FAVORITES_SCREENSHOT") {
             h.render().unwrap().save(path).unwrap();
         }
         h.get_by_label("Light").click();

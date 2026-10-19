@@ -1,10 +1,10 @@
 # Ukrainian (uk) catalog. Columns separated by TAB: context <TAB> source <TAB> translation
 # Empty context is a plain UI string. Escapes: \n, \t, \\; preserve placeholders and trailing ….
-# Original clean-room translations from the meaning of FilmCraft's English menu labels,
+# Original clean-room translations from the meaning of Billo Cut's English menu labels,
 # using Ukrainian video-editing vocabulary. No proprietary localization resources were used.
 # Core menu coverage; other interface strings fall back to English.
 
-	About FilmCraft	Про FilmCraft
+	About Billo Cut	Про Billo Cut
 	Add Audio Submix Track	Додати доріжку підміксу аудіо
 	Add Caption at Playhead	Додати субтитр у позиції курсора відтворення
 	Add Chapter Marker…	Додати маркер розділу…
@@ -30,7 +30,7 @@
 	Apply Default Transitions to Selection	Застосувати типові переходи до виділення
 	Apply Video Transition	Застосувати відеоперехід
 	Arrange	Упорядкувати
-	ArtCraft Website	Вебсайт ArtCraft
+	BilloTech	Вебсайт BilloTech
 	Assembly	Компонування
 	Attach Proxies…	Приєднати проксі…
 	Audio	Аудіо
@@ -126,9 +126,9 @@
 	File	Файл
 	File…	Файл…
 	Fill frame	Заповнити кадр
-	FilmCraft Help…	Довідка FilmCraft…
-	FilmCraft on GitHub	FilmCraft на GitHub
-	FilmCraft on getartcraft.com	FilmCraft на getartcraft.com
+	Billo Cut Help…	Довідка Billo Cut…
+	Agent access	Billo Cut на GitHub
+	Billo Cut on billysorrells.com/billotech	Billo Cut на billysorrells.com/billotech
 	Find Next	Знайти далі
 	Find…	Знайти…
 	Fit	Умістити
@@ -172,7 +172,7 @@
 	Insert Frame Hold Segment	Вставити сегмент стоп-кадру
 	Install Motion Graphics Template…	Установити шаблон анімаційної графіки…
 	Interpret Footage…	Інтерпретувати матеріал…
-	Join the ArtCraft Discord…	Приєднатися до Discord ArtCraft…
+	BilloTech Toolkit…	Приєднатися до Discord BilloTech…
 	Keyboard Shortcuts…	Клавіатурні скорочення…
 	Label	Мітка
 	Labels…	Мітки…
@@ -264,7 +264,7 @@
 	Render Selection	Рендерити виділення
 	Replace Fonts in Projects…	Замінити шрифти в проєктах…
 	Replace With Clip	Замінити кліпом
-	Report an Issue…	Повідомити про проблему…
+	Send feedback…	Повідомити про проблему…
 	Reset All Parameters	Скинути всі параметри
 	Reset Duration	Скинути тривалість
 	Reset to Saved Layout	Відновити збережене компонування
@@ -299,7 +299,7 @@
 	Select Previous Graphic	Вибрати попередній графічний елемент
 	Select Previous Layer	Вибрати попередній шар
 	Selection Follows Playhead	Виділення слідує за курсором відтворення
-	Selection as FilmCraft Project…	Виділення як проєкт FilmCraft…
+	Selection as Billo Cut Project…	Виділення як проєкт Billo Cut…
 	Selection…	Виділення…
 	Send Backward	Перемістити назад
 	Send to Back	На задній план

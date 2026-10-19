@@ -9,15 +9,15 @@ Usage: filmcraft [options] [project.fcproj | media files...]
 
 Options:
   --control <port>   start the localhost JSON-lines control server
-                     (also: FILMCRAFT_CONTROL_PORT)
+                     (also: BILLO CUT_CONTROL_PORT)
   --control-input-only  accept widget input only from the control server
-                     (requires --control or FILMCRAFT_CONTROL_PORT)
+                     (requires --control or BILLO CUT_CONTROL_PORT)
   --demo             open the demo project
   --empty            start with an empty project
   --recover          recover the newest unsaved changes without asking
   --no-recover       start without asking about unsaved changes
   --data-dir <dir>   folder for auto-save, crash recovery and logs
-                     (also: FILMCRAFT_DATA_DIR)
+                     (also: BILLO CUT_DATA_DIR)
   --graphics <mode>  start with this graphics mode and keep it: default,
                      dx12 (Windows), software (Windows, Linux);
                      `--graphics default` undoes an automatic fallback
@@ -110,10 +110,10 @@ pub fn parse(env_control_port: Option<String>, args: impl IntoIterator<Item = Os
     if l.control_port.is_none()
         && let Some(port) = env_control_port.as_deref().map(str::trim).filter(|p| !p.is_empty())
     {
-        l.control_port = Some(port.parse().map_err(|_| format!("FILMCRAFT_CONTROL_PORT needs a port number, got `{port}`"))?);
+        l.control_port = Some(port.parse().map_err(|_| format!("BILLO CUT_CONTROL_PORT needs a port number, got `{port}`"))?);
     }
     if l.control_input_only && l.control_port.is_none() {
-        return Err("--control-input-only requires --control or FILMCRAFT_CONTROL_PORT".into());
+        return Err("--control-input-only requires --control or BILLO CUT_CONTROL_PORT".into());
     }
     Ok(Cli::Run(l))
 }
@@ -205,7 +205,7 @@ mod tests {
     fn a_bad_port_in_the_environment_is_an_error_like_a_bad_control_flag() {
         for bad in ["abc", "70000", "-1", "98 76", "9876x", "\u{fffd}"] {
             let e = parse_env(Some(bad), &[]).unwrap_err();
-            assert!(e.contains("FILMCRAFT_CONTROL_PORT") && e.contains(bad), "{bad}: {e}");
+            assert!(e.contains("BILLO CUT_CONTROL_PORT") && e.contains(bad), "{bad}: {e}");
             assert!(parse_env(Some(bad), &["--empty", "a.mp4"]).is_err(), "{bad}");
             // the flag wins, so the environment's value is not looked at; nor for --help / --version
             assert_eq!(parse_env(Some(bad), &["--control", "9"]).map(|c| matches!(c, Cli::Run(l) if l.control_port == Some(9))), Ok(true), "{bad}");

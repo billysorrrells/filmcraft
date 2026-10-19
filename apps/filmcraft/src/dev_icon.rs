@@ -33,7 +33,7 @@ pub fn ensure_dev_desktop_entry() {
     // Opt-in only: a plain `cargo run` (agents, worktrees, other checkouts) must not write into
     // the user's profile, and a packaged release never does (packages and install.sh install
     // the real entry).
-    if std::env::var_os("FILMCRAFT_DEV_DESKTOP_ENTRY").is_none_or(|v| v != "1") {
+    if std::env::var_os("BILLO CUT_DEV_DESKTOP_ENTRY").is_none_or(|v| v != "1") {
         return;
     }
     if let Err(e) = ensure() {

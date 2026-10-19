@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 /// Environment variable that makes missing oracles a hard failure.
-pub const REQUIRE_ENV: &str = "FILMCRAFT_REQUIRE_ORACLES";
+pub const REQUIRE_ENV: &str = "BILLO CUT_REQUIRE_ORACLES";
 
 const KNOWN_DIRS: &[&str] = &[
     "/opt/homebrew/bin",
@@ -65,7 +65,7 @@ pub fn find_tool_in(name: &str, explicit: Option<&std::ffi::OsStr>, path: Option
 }
 
 fn env_var(name: &str) -> String {
-    format!("FILMCRAFT_{}", name.to_ascii_uppercase())
+    format!("BILLO CUT_{}", name.to_ascii_uppercase())
 }
 
 /// Find a tool using the process environment (uncached).
