@@ -279,6 +279,14 @@ fn spec(id: &'static str, label: &'static str, params: &'static str, enabled: En
     CommandSpec { id, label, menu: &[], shortcut: None, params, enabled, run, journal }
 }
 
+fn menu(id: &'static str, label: &'static str, run: Run) -> CommandSpec {
+    CommandSpec { id, label, menu: &["Billo"], shortcut: None, params: "{}", enabled: has_seq, run, journal: true }
+}
+
+fn mark(s: &mut Session, status: &str) -> Result<Value> {
+    set_status(s, &json!({"status": status}))
+}
+
 pub fn commands() -> Vec<CommandSpec> {
     vec![
         spec("billo.shot.setStatus", "Set Shot Status", r#"{"clips":[id]?,"status":"locked|real|regen|review","note":str?}"#, has_seq, set_status, true),
@@ -288,6 +296,13 @@ pub fn commands() -> Vec<CommandSpec> {
         spec("billo.dialogue.clean", "Clean Dialogue", r#"{"clips":[id]?,"target":lufs=-16}"#, has_seq, dialogue_clean, true),
         spec("billo.deliver.loudness", "Deliver Loudness", r#"{"target":lufs=-14}"#, has_seq, deliver_loudness, true),
         spec("billo.wall.package", "Render Wall Package", r#"{"dir":str}"#, has_seq, wall_package, true),
+        menu("billo.shot.markLocked", "Mark Shot Locked", |s, _| mark(s, "locked")),
+        menu("billo.shot.markReal", "Mark Shot Real Footage", |s, _| mark(s, "real")),
+        menu("billo.shot.markRegen", "Mark Shot Needs Regen", |s, _| mark(s, "regen")),
+        menu("billo.shot.markReview", "Mark Shot For Review", |s, _| mark(s, "review")),
+        menu("billo.dialogue.cleanSelected", "Clean Up Dialogue", |s, _| dialogue_clean(s, &json!({}))),
+        menu("billo.deliver.loudness14", "Deliver at −14 LUFS", |s, _| deliver_loudness(s, &json!({}))),
+        menu("billo.stems.clearSolo", "Clear Stem Solo", |s, _| stems_solo(s, &json!({}))),
         spec(
             "billo.fxVault.list",
             "FX Vault",
