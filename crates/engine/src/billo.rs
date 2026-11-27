@@ -741,10 +741,12 @@ fn upscale_request(s: &mut Session, p: &Value) -> Result<Value> {
             .filter(|i| whole || clips.contains(&i.id))
             .take(MAX_WALL_CLIPS)
             .map(|i| {
+                // shaped as an os.upscale_jobs row: `engine_id` stays empty for the runner's own routing by tag
                 let job = json!({
-                    "take_ref": i.name, "clip": i.id.0, "project": version_base(&project), "source_res": source, "target_res": target, "tag": tag, "engine_id": engine,
+                    "take_ref": i.name, "project": version_base(&project), "source_res": source, "target_res": target,
+                    "engine_id": if engine == "auto" { Value::Null } else { json!(engine) },
                     "passes": [{"scale": 2}, {"qc": "face-lock"}, {"scale": 2}], "status": "queued",
-                    "startSeconds": i.start.seconds(), "durationSeconds": i.duration.seconds(),
+                    "ctx": {"clip": i.id.0, "tag": tag, "engine": engine, "startSeconds": i.start.seconds(), "durationSeconds": i.duration.seconds(), "editor": "Billo Cut"},
                 });
                 (i.start.0, i.name.clone(), job)
             })

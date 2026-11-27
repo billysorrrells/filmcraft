@@ -305,7 +305,8 @@ fn upscale_request_returns_job_rows() {
     let r = s.execute("billo.upscale.request", json!({"clips": [clip], "target": "4K", "tag": "real"})).unwrap();
     assert_eq!(r["jobs"].as_array().unwrap().len(), 1);
     assert_eq!(r["jobs"][0]["target_res"], "4k");
-    assert_eq!(r["jobs"][0]["tag"], "real_footage");
+    assert_eq!(r["jobs"][0]["ctx"]["tag"], "real_footage");
+    assert!(r["jobs"][0]["engine_id"].is_null(), "auto leaves the engine to the runner's routing table");
     assert_eq!(r["jobs"][0]["passes"].as_array().unwrap().len(), 3);
     let all = s.execute("billo.upscale.request", json!({"timeline": true})).unwrap();
     assert!(all["jobs"].as_array().unwrap().len() > 1);
