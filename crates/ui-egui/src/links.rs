@@ -125,10 +125,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn urls_follow_the_artcraft_scheme() {
-        assert_eq!(APP_PAGE, format!("{WEBSITE}/apps/{APP}"));
-        assert_eq!(GITHUB, format!("https://github.com/storytold/{APP}"));
-        assert!(ALL.iter().all(|(id, _, u)| id.starts_with("help.") && u.starts_with("https://")));
+    fn urls_follow_the_billotech_scheme() {
+        assert_eq!(APP, "filmcraft");
+        assert!(APP_PAGE.starts_with(WEBSITE) && GITHUB.starts_with(WEBSITE));
+        assert!(ALL.iter().all(|(id, _, u)| id.starts_with("help.") && (u.starts_with("https://") || u.starts_with("mailto:"))));
         assert_eq!(url_for("help.discord"), Some(DISCORD));
         assert_eq!(url_for("help.nope"), None);
     }
