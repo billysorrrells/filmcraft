@@ -4376,6 +4376,9 @@ fn install_project(s: &mut Session, proj: filmcraft_project::Project, path: Opti
 
 fn open_project(s: &mut Session, path: &str) -> Result<Value> {
     let bytes = s.services.read_file(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+    if path.to_ascii_lowercase().ends_with(".prproj") || crate::interchange::detect(path, &bytes) == Some(filmcraft_interchange::Format::Prproj) {
+        return open_premiere_project(s, path, &bytes);
+    }
     let loaded = filmcraft_format::decode(&bytes).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
     let (from, migrated) = (loaded.schema_version, loaded.migrated());
     install_project(s, loaded.project, Some(path.to_string()), true);
@@ -4393,6 +4396,20 @@ fn open_project(s: &mut Session, path: &str) -> Result<Value> {
     }
     let missing = crate::relink::on_open(s);
     Ok(json!({"path": path, "schemaVersion": from, "migrated": migrated, "missingMedia": missing}))
+}
+
+/// File ▸ Open on a Premiere Pro project: a new, unsaved project built from it (bins, media,
+/// sequences). Saving asks for a `.fcproj` name; the `.prproj` is never written to.
+fn open_premiere_project(s: &mut Session, path: &str, bytes: &[u8]) -> Result<Value> {
+    let name = std::path::Path::new(path).file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "Premiere Project".into());
+    install_project(s, filmcraft_project::Project::new(&name), None, true);
+    let r = crate::interchange::import(s, path, bytes, filmcraft_interchange::Format::Prproj)?;
+    if let Some(seq) = r["sequences"].as_array().and_then(|a| a.first()).and_then(Value::as_u64) {
+        s.events.push(crate::Event::OpenSequence(filmcraft_project::ItemId(seq)));
+    }
+    let missing = crate::relink::on_open(s);
+    s.toast(format!("Opened Premiere project {name}; save it as a FilmCraft project to keep your changes"));
+    Ok(json!({"path": path, "premiere": true, "import": r, "missingMedia": missing}))
 }
 
 /// Load a recovery candidate (newest when `id` is None) as the current, unsaved project.
