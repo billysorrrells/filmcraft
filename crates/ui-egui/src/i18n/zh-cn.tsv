@@ -3593,3 +3593,43 @@
 	Clean Up Dialogue	清理对白
 	Deliver at −14 LUFS	以 −14 LUFS 交付
 	Clear Stem Solo	清除分轨独奏
+	Split Stems	分离分轨
+	Swap Take	替换镜次
+	Save Version	保存版本
+	Versions	版本
+	Version Payload	版本数据
+	Request Regen	请求重新生成
+	Ask Billo	问 Billo
+	What Billo Understands	Billo 能理解的内容
+	Split Song Into Stems	将歌曲分离为分轨
+	Swap In Selected Take	换入所选镜次
+	Locked	已锁定
+	Real Footage	真实素材
+	Needs Regen	需重新生成
+	Unmarked	未标记
+	Open a sequence to use the Billo tools.	打开一个序列以使用 Billo 工具。
+	Shots	镜头
+	{locked} of {total} locked ({percent}%)	{total} 个中已锁定 {locked} 个（{percent}%）
+	Stems	分轨
+	Select the song, split it, then work each stem on its own track.	选择歌曲并分离，然后在各自的轨道上处理每个分轨。
+	Solo {stem}	独奏 {stem}
+	Sound	声音
+	split the stems, solo vocals, mark locked…	用英文输入：split the stems, solo vocals, mark locked…
+	Go	执行
+	Not on my list yet. Try: split the stems, solo vocals, mark locked, clean dialogue.	暂不支持。请用英文尝试：split the stems, solo vocals, mark locked, clean dialogue.
+	FX Vault	特效库
+	Video FX	视频特效
+	LUTs	LUT
+	Vocal Chains	人声链
+	Sound FX	音效
+	in the vault	在库中
+	re-send needed	需重新发送
+	in a store account	在商店账户中
+	licensed	已授权
+	Open Render Wall Timeline	打开 Render Wall 时间线
+	Render Wall Timeline	Render Wall 时间线
+	Request Upscale	请求放大
+	Upscale Shot to 4K	将镜头放大到 4K
+	Master in 4K	4K 母版
+	Upscale	放大
+	Queues the job for the upscale runner. Drafts stay at 480p until the end.	将任务排入放大队列。草稿在最后之前保持 480p。

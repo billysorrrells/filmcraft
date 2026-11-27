@@ -217,3 +217,99 @@ fn every_assistant_request_names_a_real_command() {
         assert!(ids.iter().any(|c| c == id), "assistant names a missing command: {id}");
     }
 }
+
+/// A Render Wall timeline shaped like the live ones (`billo-timeline/1`).
+fn wall_fixture() -> serde_json::Value {
+    json!({
+        "schema": "billo-timeline/1", "slug": "test-cut", "title": "TEST · Billo Zord", "fps": 24, "frames": 144, "duration": 6.0, "canvas": [854, 480],
+        "bin": {"black": {"kind": "black"}, "A2": {"media": "a2.mp4"}, "B1": {"media": "b1.mp4"}},
+        "tracks": [
+            {"id": "V2", "name": "Story · status", "kind": "gfx", "editable": false, "clips": [
+                {"id": "s01", "f0": 0, "n": 48, "label": "THE HOUSE · LOCKED kit"},
+                {"id": "s02", "f0": 72, "n": 48, "label": "MEMORIES · old kit, regen"}]},
+            {"id": "V1", "name": "Picture", "kind": "video", "editable": true, "clips": [
+                {"id": "c01", "src": "A2", "ss": 0.5, "n": 48, "lut": null, "label": "THE HOUSE", "f0": 0, "thumb": "t1.jpg"},
+                {"id": "g1", "src": "black", "ss": 0.0, "n": 24, "label": "Black", "f0": 48},
+                {"id": "c02", "src": "B1", "ss": 1.0, "n": 48, "lut": null, "label": "MEMORIES", "f0": 72, "thumb": "t2.jpg"},
+                {"id": "c03", "src": "MISSING", "ss": 0.0, "n": 24, "label": "LOST", "f0": 120}]},
+            {"id": "A1", "name": "Record · full mix", "kind": "audio", "url": "rec.m4a"},
+            {"id": "A2", "name": "Vocals", "kind": "audio", "url": "voc.m4a"}
+        ]
+    })
+}
+
+fn wall_items(s: &Session) -> serde_json::Value {
+    let seq = s.active_sequence().unwrap();
+    let mut video: Vec<u64> = seq.video_tracks.iter().flat_map(|t| t.items.iter()).map(|i| i.item.0).collect();
+    video.dedup();
+    let audio = seq.audio_tracks.iter().flat_map(|t| t.items.iter()).last().unwrap().item.0;
+    json!({"A2": video[0], "B1": video.iter().find(|v| **v != video[0]).unwrap(), "track:A1": audio, "track:A2": audio})
+}
+
+#[test]
+fn wall_open_builds_the_sequence_and_round_trips() {
+    let mut s = demo();
+    let items = wall_items(&s);
+    let undo0 = s.history.undo.len();
+    let r = s.execute("billo.wall.open", json!({"timeline": wall_fixture(), "items": items})).unwrap();
+    assert_eq!(r["placed"], 2);
+    assert_eq!(r["skipped"], json!(["MISSING"]));
+    assert_eq!(s.history.undo.len(), undo0 + 1, "one undo step");
+    let seq = s.active_sequence().unwrap();
+    assert_eq!((seq.settings.width, seq.settings.height), (854, 480));
+    let rate = seq.settings.frame_rate;
+    let v1 = &seq.video_tracks[0].items;
+    assert_eq!(v1.len(), 2);
+    assert_eq!((v1[0].name.as_str(), rate.frame_at(v1[0].start), rate.frame_at(v1[0].end())), ("THE HOUSE", 0, 48));
+    assert_eq!((v1[1].name.as_str(), rate.frame_at(v1[1].start)), ("MEMORIES", 72));
+    assert!((v1[0].source_in.seconds() - 0.5).abs() < 1e-6);
+    assert_eq!(v1[0].label, filmcraft_project::Label::Forest, "LOCKED block paints the shot");
+    assert_eq!(v1[1].label, filmcraft_project::Label::Rose, "regen block paints the shot");
+    assert_eq!(seq.audio_tracks.len(), 2);
+    assert_eq!(seq.audio_tracks[0].name, "Record · full mix");
+    assert!(!seq.audio_tracks[0].muted && seq.audio_tracks[1].muted, "the record plays, the stem waits muted");
+    assert!(seq.video_tracks.iter().chain(seq.audio_tracks.iter()).all(|t| t.items.iter().all(|i| i.id.0 != 0)));
+
+    // unchanged cut -> the same picture clips come back, ids and thumbs kept, the hole is black
+    let back = s.execute("billo.wall.timeline", json!({"base": wall_fixture(), "items": items})).unwrap();
+    let clips = back["timeline"]["tracks"][1]["clips"].as_array().unwrap();
+    let brief: Vec<_> =
+        clips.iter().map(|c| (c["id"].as_str().unwrap(), c["src"].as_str().unwrap(), c["f0"].as_i64().unwrap(), c["n"].as_i64().unwrap())).collect();
+    assert_eq!(brief, vec![("c01", "A2", 0, 48), ("g1", "black", 48, 24), ("c02", "B1", 72, 48)]);
+    assert_eq!(clips[0]["thumb"], "t1.jpg");
+    assert_eq!(clips[0]["ss"], 0.5);
+    assert_eq!(clips[0]["status"], "locked");
+    assert_eq!(back["timeline"]["frames"], 120);
+    assert_eq!(back["timeline"]["tracks"][0]["clips"].as_array().unwrap().len(), 2, "other tracks are left alone");
+    assert_eq!(back["unmapped"], json!([]));
+    s.execute("edit.undo", json!({})).unwrap();
+}
+
+#[test]
+fn wall_commands_reject_bad_input() {
+    let mut s = demo();
+    assert!(s.execute("billo.wall.open", json!({})).is_err());
+    assert!(s.execute("billo.wall.open", json!({"timeline": {"fps": 24}})).is_err());
+    assert!(s.execute("billo.wall.timeline", json!({})).is_err());
+    assert!(s.execute("billo.wall.timeline", json!({"base": {"tracks": []}})).is_err());
+    // hostile numbers do not panic
+    let odd = json!({"fps": 1e30, "canvas": [0, 99999999u64], "tracks": [{"kind": "video", "clips": [{"src": "A2", "f0": -5, "n": 1e300, "ss": -1e300}]}]});
+    let items = wall_items(&s);
+    let _ = s.execute("billo.wall.open", json!({"timeline": odd, "items": items}));
+}
+
+#[test]
+fn upscale_request_returns_job_rows() {
+    let mut s = demo();
+    let (clip, _) = first_clip(&s, false);
+    let r = s.execute("billo.upscale.request", json!({"clips": [clip], "target": "4K", "tag": "real"})).unwrap();
+    assert_eq!(r["jobs"].as_array().unwrap().len(), 1);
+    assert_eq!(r["jobs"][0]["target_res"], "4k");
+    assert_eq!(r["jobs"][0]["tag"], "real_footage");
+    assert_eq!(r["jobs"][0]["passes"].as_array().unwrap().len(), 3);
+    let all = s.execute("billo.upscale.request", json!({"timeline": true})).unwrap();
+    assert!(all["jobs"].as_array().unwrap().len() > 1);
+    assert!(s.execute("billo.upscale.request", json!({"clips": [clip], "target": "8k"})).is_err());
+    s.state.selection.clear();
+    assert!(s.execute("billo.upscale.request", json!({})).is_err());
+}

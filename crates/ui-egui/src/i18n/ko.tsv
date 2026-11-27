@@ -3604,3 +3604,43 @@
 	Clean Up Dialogue	대화 정리
 	Deliver at −14 LUFS	−14 LUFS로 납품
 	Clear Stem Solo	스템 솔로 해제
+	Split Stems	스템 분리
+	Swap Take	테이크 교체
+	Save Version	버전 저장
+	Versions	버전
+	Version Payload	버전 데이터
+	Request Regen	재생성 요청
+	Ask Billo	Billo에게 요청
+	What Billo Understands	Billo가 이해하는 것
+	Split Song Into Stems	곡을 스템으로 분리
+	Swap In Selected Take	선택한 테이크로 교체
+	Locked	확정
+	Real Footage	실제 촬영본
+	Needs Regen	재생성 필요
+	Unmarked	표시 없음
+	Open a sequence to use the Billo tools.	Billo 도구를 쓰려면 시퀀스를 여세요.
+	Shots	샷
+	{locked} of {total} locked ({percent}%)	{total}개 중 {locked}개 확정 ({percent}%)
+	Stems	스템
+	Select the song, split it, then work each stem on its own track.	곡을 선택해 분리한 뒤 각 스템을 자기 트랙에서 작업하세요.
+	Solo {stem}	{stem} 솔로
+	Sound	사운드
+	split the stems, solo vocals, mark locked…	영어로 입력: split the stems, solo vocals, mark locked…
+	Go	실행
+	Not on my list yet. Try: split the stems, solo vocals, mark locked, clean dialogue.	아직 목록에 없습니다. 영어로 입력해 보세요: split the stems, solo vocals, mark locked, clean dialogue.
+	FX Vault	FX 보관함
+	Video FX	비디오 FX
+	LUTs	LUT
+	Vocal Chains	보컬 체인
+	Sound FX	효과음
+	in the vault	보관함에 있음
+	re-send needed	재전송 필요
+	in a store account	스토어 계정에 있음
+	licensed	라이선스 보유
+	Open Render Wall Timeline	Render Wall 타임라인 열기
+	Render Wall Timeline	Render Wall 타임라인
+	Request Upscale	업스케일 요청
+	Upscale Shot to 4K	샷을 4K로 업스케일
+	Master in 4K	4K 마스터
+	Upscale	업스케일
+	Queues the job for the upscale runner. Drafts stay at 480p until the end.	업스케일 작업을 대기열에 넣습니다. 초안은 끝까지 480p로 유지됩니다.
