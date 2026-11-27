@@ -3661,3 +3661,9 @@
 	Master in 4K	Máster en 4K
 	Upscale	Escalado
 	Queues the job for the upscale runner. Drafts stay at 480p until the end.	Pone el trabajo en cola para el escalador. Los borradores quedan en 480p hasta el final.
+	Find the Beats	Buscar los beats
+	Find the Beats in Song	Buscar los beats de la canción
+	Snap Cuts to the Beat	Ajustar cortes al beat
+	Cut Dead Air	Cortar silencios
+	Rhythm	Ritmo
+	Mark the kicks in the song, then roll every cut onto the nearest one.	Marca los bombos de la canción y luego mueve cada corte al más cercano.

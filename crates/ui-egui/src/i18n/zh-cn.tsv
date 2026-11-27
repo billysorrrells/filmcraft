@@ -3633,3 +3633,9 @@
 	Master in 4K	4K 母版
 	Upscale	放大
 	Queues the job for the upscale runner. Drafts stay at 480p until the end.	将任务排入放大队列。草稿在最后之前保持 480p。
+	Find the Beats	查找节拍
+	Find the Beats in Song	查找歌曲中的节拍
+	Snap Cuts to the Beat	将剪辑点对齐到节拍
+	Cut Dead Air	剪掉空白停顿
+	Rhythm	节奏
+	Mark the kicks in the song, then roll every cut onto the nearest one.	标记歌曲中的底鼓，然后把每个剪辑点移到最近的一个上。

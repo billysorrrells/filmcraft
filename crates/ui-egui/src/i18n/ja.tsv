@@ -3660,3 +3660,9 @@
 	Master in 4K	4K でマスタリング
 	Upscale	アップスケール
 	Queues the job for the upscale runner. Drafts stay at 480p until the end.	アップスケール処理のキューに追加します。下書きは最後まで 480p のままです。
+	Find the Beats	ビートを検出
+	Find the Beats in Song	曲のビートを検出
+	Snap Cuts to the Beat	カットをビートに合わせる
+	Cut Dead Air	無音部分をカット
+	Rhythm	リズム
+	Mark the kicks in the song, then roll every cut onto the nearest one.	曲のキックをマークし、各カットを最も近いキックに合わせます。

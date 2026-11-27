@@ -3644,3 +3644,9 @@
 	Master in 4K	4K 마스터
 	Upscale	업스케일
 	Queues the job for the upscale runner. Drafts stay at 480p until the end.	업스케일 작업을 대기열에 넣습니다. 초안은 끝까지 480p로 유지됩니다.
+	Find the Beats	비트 찾기
+	Find the Beats in Song	곡에서 비트 찾기
+	Snap Cuts to the Beat	컷을 비트에 맞추기
+	Cut Dead Air	무음 구간 잘라내기
+	Rhythm	리듬
+	Mark the kicks in the song, then roll every cut onto the nearest one.	곡의 킥을 표시한 뒤 모든 컷을 가장 가까운 킥에 맞춥니다.

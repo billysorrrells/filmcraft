@@ -4,7 +4,7 @@
 //!
 //! Automation ids: `billo.mark.<locked|real|regen|review>`, `billo.shot.<clip id>`,
 //! `billo.stems.split`, `billo.stems.solo.<Vocals|Drums|Bass|Other>`, `billo.stems.clear`,
-//! `billo.sound.clean`, `billo.sound.deliver`, `billo.upscale.shot`, `billo.upscale.master`, `billo.version.save`, `billo.ask.text`,
+//! `billo.beats.detect`, `billo.beats.snap`, `billo.cut.silence`, `billo.sound.clean`, `billo.sound.deliver`, `billo.upscale.shot`, `billo.upscale.master`, `billo.version.save`, `billo.ask.text`,
 //! `billo.ask.go`, `billo.vault.<all|transitions|luts|text|vocal|sfx|plugins>`.
 
 use egui::{Color32, Rect, RichText, vec2};
@@ -79,6 +79,39 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
             dim(ui, &t, tl!("Open a sequence to use the Billo tools."));
         }
 
+        // ---- Ask Billo
+        heading(ui, &t, tl!("Ask Billo"));
+        let ask_id = egui::Id::new("billo-ask-text");
+        let answer_id = egui::Id::new("billo-ask-answer");
+        let mut text = ui.data(|d| d.get_temp::<String>(ask_id)).unwrap_or_default();
+        let mut go = false;
+        ui.horizontal(|ui| {
+            let width = (ui.available_width() - 48.0).max(60.0);
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut text).id_salt("billo-ask").hint_text(tl!("split the stems, solo vocals, mark locked…")).desired_width(width),
+            );
+            app.auto.add_response("billo.ask.text", &r, &text);
+            go = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+            let b = ui.button(RichText::new(tl!("Go")).font(Tokens::ui(11.5)));
+            app.auto.add_response("billo.ask.go", &b, "Go");
+            go |= b.clicked();
+        });
+        if go && !text.trim().is_empty() {
+            let answer = match app.session.execute("billo.assistant.run", json!({"text": text})) {
+                Ok(r) if r["understood"] == false => tl!("Not on my list yet. Try: split the stems, solo vocals, mark locked, clean dialogue.").to_string(),
+                Ok(r) if r["ran"] == true => r["says"].as_str().unwrap_or_default().to_string(),
+                Ok(r) => r["error"].as_str().unwrap_or_default().to_string(),
+                Err(e) => e.to_string(),
+            };
+            ui.data_mut(|d| d.insert_temp(answer_id, answer));
+            text.clear();
+        }
+        ui.data_mut(|d| d.insert_temp(ask_id, text));
+        let answer = ui.data(|d| d.get_temp::<String>(answer_id)).unwrap_or_default();
+        if !answer.is_empty() {
+            dim(ui, &t, &answer);
+        }
+
         // ---- Shots
         heading(ui, &t, tl!("Shots"));
         let locked = shots.iter().filter(|s| s.2 == "locked").count();
@@ -122,6 +155,15 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
             }
         });
 
+        // ---- Rhythm
+        heading(ui, &t, tl!("Rhythm"));
+        dim(ui, &t, tl!("Mark the kicks in the song, then roll every cut onto the nearest one."));
+        ui.horizontal_wrapped(|ui| {
+            button(ui, &mut app.auto, &mut actions, "billo.beats.detect", crate::i18n::t("Find the Beats in Song"), "billo.beats.detectSelected", json!({}));
+            button(ui, &mut app.auto, &mut actions, "billo.beats.snap", crate::i18n::t("Snap Cuts to the Beat"), "billo.beats.snapAll", json!({}));
+            button(ui, &mut app.auto, &mut actions, "billo.cut.silence", crate::i18n::t("Cut Dead Air"), "billo.cut.silenceSelected", json!({}));
+        });
+
         // ---- Sound
         heading(ui, &t, tl!("Sound"));
         ui.horizontal_wrapped(|ui| {
@@ -144,39 +186,6 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
         });
         for (_, name, _) in versions.iter().rev().take(12) {
             dim(ui, &t, name);
-        }
-
-        // ---- Ask Billo
-        heading(ui, &t, tl!("Ask Billo"));
-        let ask_id = egui::Id::new("billo-ask-text");
-        let answer_id = egui::Id::new("billo-ask-answer");
-        let mut text = ui.data(|d| d.get_temp::<String>(ask_id)).unwrap_or_default();
-        let mut go = false;
-        ui.horizontal(|ui| {
-            let width = (ui.available_width() - 48.0).max(60.0);
-            let r = ui.add(
-                egui::TextEdit::singleline(&mut text).id_salt("billo-ask").hint_text(tl!("split the stems, solo vocals, mark locked…")).desired_width(width),
-            );
-            app.auto.add_response("billo.ask.text", &r, &text);
-            go = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-            let b = ui.button(RichText::new(tl!("Go")).font(Tokens::ui(11.5)));
-            app.auto.add_response("billo.ask.go", &b, "Go");
-            go |= b.clicked();
-        });
-        if go && !text.trim().is_empty() {
-            let answer = match app.session.execute("billo.assistant.run", json!({"text": text})) {
-                Ok(r) if r["understood"] == false => tl!("Not on my list yet. Try: split the stems, solo vocals, mark locked, clean dialogue.").to_string(),
-                Ok(r) if r["ran"] == true => r["says"].as_str().unwrap_or_default().to_string(),
-                Ok(r) => r["error"].as_str().unwrap_or_default().to_string(),
-                Err(e) => e.to_string(),
-            };
-            ui.data_mut(|d| d.insert_temp(answer_id, answer));
-            text.clear();
-        }
-        ui.data_mut(|d| d.insert_temp(ask_id, text));
-        let answer = ui.data(|d| d.get_temp::<String>(answer_id)).unwrap_or_default();
-        if !answer.is_empty() {
-            dim(ui, &t, &answer);
         }
 
         // ---- the shot list (below the tools, so a long cut never pushes them out of reach)

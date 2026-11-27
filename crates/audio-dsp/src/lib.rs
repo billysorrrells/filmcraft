@@ -8,6 +8,7 @@
 //! * [`biquad`] — RBJ-cookbook biquads (TDF-II) with analytic magnitude response.
 //! * [`sync`] — offset between two recordings of one event (GCC-PHAT, sample-accurate).
 //! * [`resample`] — streaming, block-invariant rate conversion for playback on a device at another rate.
+//! * [`beats`] — onset (kick / hit) detection, rough tempo and quiet stretches, for cutting on the beat.
 //! * [`stems`] — quick four-stem split (vocals, drums, bass, other) without a trained model.
 //! * [`channels`] — channel layouts, ITU-R BS.775 up/downmix, 5.1 mixdown types, the 5.1 panner.
 //!
@@ -20,6 +21,7 @@
 
 #![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable))]
 
+pub mod beats;
 pub mod biquad;
 pub mod channels;
 pub mod design;

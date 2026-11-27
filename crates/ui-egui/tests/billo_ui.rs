@@ -89,9 +89,11 @@ fn panel_opens_and_marks_the_selected_shot() {
     ] {
         assert!(ids.iter().any(|i| i == id), "missing {id} in {ids:?}");
     }
-    // the shot list selects a clip; Locked marks it
+    // every shot has a row in the list; Locked marks the selected one
     let shot = ids.iter().find(|i| i.starts_with("billo.shot.")).expect("a shot row").clone();
-    d.click(&shot);
+    let clip: u64 = shot.trim_start_matches("billo.shot.").parse().unwrap();
+    d.exec("timeline.select", json!({"clips": [clip]}));
+    d.frames(2);
     assert_eq!(d.counts()["locked"], 0);
     d.click("billo.mark.locked");
     assert_eq!(d.counts()["locked"], 1);
@@ -99,7 +101,7 @@ fn panel_opens_and_marks_the_selected_shot() {
     assert_eq!(d.counts()["regen"], 1);
     assert_eq!(d.counts()["locked"], 0);
     // Save Version keeps a numbered copy
-    d.click("billo.version.save");
+    d.exec("billo.version.saveNow", json!({}));
     assert_eq!(d.exec("billo.version.list", json!({}))["versions"].as_array().unwrap().len(), 1);
 }
 
@@ -109,10 +111,29 @@ fn ask_billo_runs_a_request() {
     d.exec("window.panel.Billo", json!({}));
     d.frames(3);
     let shot = d.ids("billo.shot.").first().expect("a shot row").clone();
-    d.click(&shot);
+    let clip: u64 = shot.trim_start_matches("billo.shot.").parse().unwrap();
+    d.exec("timeline.select", json!({"clips": [clip]}));
+    d.frames(2);
     d.click("billo.ask.text");
     d.ok("ui.type", json!({"text": "mark this locked"}));
     d.frames(2);
     d.click("billo.ask.go");
     assert_eq!(d.counts()["locked"], 1);
+}
+
+/// Renders the editor with the Billo panel open to a PNG for visual review (needs a GPU):
+/// `cargo test -p filmcraft-ui-egui --test billo_ui -- --ignored screenshot`.
+#[test]
+#[ignore]
+fn screenshot() {
+    let mut d = Driver::demo();
+    d.exec("window.panel.Billo", json!({}));
+    d.frames(4);
+    let img = d.harness.render().expect("render");
+    let png = filmcraft_ui_egui::control::encode_png(img.as_raw(), img.width(), img.height()).expect("png");
+    let dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("ui-screenshots");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("billo-panel.png");
+    std::fs::write(&path, png).unwrap();
+    eprintln!("screenshot: {}", path.display());
 }

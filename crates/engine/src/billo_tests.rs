@@ -313,3 +313,100 @@ fn upscale_request_returns_job_rows() {
     s.state.selection.clear();
     assert!(s.execute("billo.upscale.request", json!({})).is_err());
 }
+
+/// Import a generated mono signal as a stereo WAV and return its project item.
+fn import_signal(s: &mut Session, name: &str, mono: &[f32]) -> u64 {
+    let stereo: Vec<f32> = mono.iter().flat_map(|v| [*v, *v]).collect();
+    let bytes = crate::previews::write_wav_f32(&stereo, 48_000);
+    crate::commands::import_bytes(s, &format!("/billo-test/{name}.wav"), bytes.into(), None).unwrap().0
+}
+
+fn audio_clip_of(s: &Session, item: u64) -> u64 {
+    s.active_sequence().unwrap().audio_tracks.iter().flat_map(|t| t.items.iter()).find(|i| i.item.0 == item).unwrap().id.0
+}
+
+#[test]
+fn beats_are_marked_and_cuts_roll_onto_them() {
+    let mut s = demo();
+    let (video_a, video_b) = {
+        let seq = s.active_sequence().unwrap();
+        let v: Vec<u64> = seq.video_tracks.iter().flat_map(|t| t.items.iter()).map(|i| i.item.0).collect();
+        (v[0], *v.iter().find(|x| **x != v[0]).unwrap())
+    };
+    // kicks every half second
+    let mut song = vec![0.0f32; 4 * 48_000];
+    for k in 1..8 {
+        for n in 0..9_600 {
+            let t = n as f32 / 48_000.0;
+            song[k * 24_000 + n] += (2.0 * std::f32::consts::PI * 60.0 * t).sin() * (-t * 25.0).exp();
+        }
+    }
+    let song_item = import_signal(&mut s, "kicks", &song);
+    s.execute("file.newSequence", json!({"name": "beat cut", "fps": 24.0, "video": 1, "audio": 1})).unwrap();
+    s.execute("timeline.place", json!({"item": song_item, "audioTrack": "A1", "time": 0, "video": false, "audio": true})).unwrap();
+    let rate = s.active_sequence().unwrap().settings.frame_rate;
+    let frames = |n: i64| rate.tick_of(n).0;
+    // the cut sits 2 frames early of the kick at 1.0 s (frame 24)
+    s.execute("timeline.place", json!({"item": video_a, "track": "V1", "time": 0, "duration": frames(22), "video": true, "audio": false})).unwrap();
+    s.execute(
+        "timeline.place",
+        json!({"item": video_b, "track": "V1", "time": frames(22), "sourceIn": frames(24), "duration": frames(30), "video": true, "audio": false}),
+    )
+    .unwrap();
+    let song_clip = audio_clip_of(&s, song_item);
+
+    assert!(s.execute("billo.beats.snapCuts", json!({})).is_err(), "no beats marked yet");
+    let found = s.execute("billo.beats.detect", json!({"song": song_clip})).unwrap();
+    assert_eq!(found["count"], 7, "{found}");
+    assert!((found["bpm"].as_f64().unwrap() - 120.0).abs() < 4.0);
+    let beats = s.active_sequence().unwrap().markers.iter().filter(|m| m.name.starts_with("BEAT")).count();
+    assert_eq!(beats, 7);
+    // a second pass replaces the markers instead of doubling them
+    s.execute("billo.beats.detect", json!({"song": song_clip})).unwrap();
+    assert_eq!(s.active_sequence().unwrap().markers.iter().filter(|m| m.name.starts_with("BEAT")).count(), 7);
+
+    let r = s.execute("billo.beats.snapCuts", json!({"tolerance": 6})).unwrap();
+    assert_eq!((r["cuts"].as_u64(), r["moved"].as_u64(), r["onBeatPercent"].as_u64()), (Some(1), Some(1), Some(100)), "{r}");
+    let seq = s.active_sequence().unwrap();
+    let v1 = &seq.video_tracks[0].items;
+    assert_eq!(rate.frame_at(v1[0].end()), 24);
+    assert_eq!(rate.frame_at(v1[1].start), 24);
+    let again = s.execute("billo.beats.snapCuts", json!({})).unwrap();
+    assert_eq!(again["alreadyOnBeat"], 1);
+    assert!(s.execute("billo.beats.detect", json!({"song": song_clip, "band": "nope"})).is_err());
+}
+
+#[test]
+fn dead_air_is_cut_and_the_cut_closes_up() {
+    let mut s = demo();
+    let mut talk = vec![0.0f32; 4 * 48_000];
+    for (i, v) in talk.iter_mut().enumerate() {
+        let t = i as f32 / 48_000.0;
+        if !(1.0..2.5).contains(&t) {
+            *v = 0.3 * (2.0 * std::f32::consts::PI * 220.0 * t).sin();
+        }
+    }
+    let item = import_signal(&mut s, "talk", &talk);
+    s.execute("file.newSequence", json!({"name": "talk", "fps": 24.0, "video": 1, "audio": 1})).unwrap();
+    s.execute("timeline.place", json!({"item": item, "audioTrack": "A1", "time": 0, "video": false, "audio": true})).unwrap();
+    let clip = audio_clip_of(&s, item);
+    let end = |s: &Session| s.active_sequence().unwrap().audio_tracks[0].items.iter().map(|i| i.end().seconds()).fold(0.0, f64::max);
+    assert!((end(&s) - 4.0).abs() < 0.05);
+
+    let dry = s.execute("billo.cut.silence", json!({"clip": clip, "dryRun": true})).unwrap();
+    assert_eq!((dry["found"].as_u64(), dry["removed"].as_u64()), (Some(1), Some(0)));
+    assert!((end(&s) - 4.0).abs() < 0.05, "a dry run changes nothing");
+
+    let r = s.execute("billo.cut.silence", json!({"clip": clip})).unwrap();
+    assert_eq!(r["removed"], 1);
+    let removed = r["seconds"].as_f64().unwrap();
+    assert!((removed - 1.26).abs() < 0.1, "1.5 s of silence less 0.12 s kept each side: {removed}");
+    assert_eq!(s.active_sequence().unwrap().audio_tracks[0].items.len(), 2, "the clip is split around the hole");
+    assert!((end(&s) - (4.0 - removed)).abs() < 0.05, "the cut closed up");
+    s.execute("edit.undo", json!({})).unwrap();
+    assert!((end(&s) - 4.0).abs() < 0.05);
+    // nothing quiet enough: nothing removed
+    let none = s.execute("billo.cut.silence", json!({"clip": clip, "minSilence": 5.0})).unwrap();
+    assert_eq!(none["found"], 0);
+    assert!(s.execute("billo.cut.silence", json!({"clip": 424_242u64})).is_err());
+}

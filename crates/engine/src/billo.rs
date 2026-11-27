@@ -19,6 +19,8 @@
 //! | `billo.regen.request` | flags shots for a regen and returns the generator ticket (480p drafts) |
 //! | `billo.wall.open` / `billo.wall.timeline` | opens a Render Wall (Billo Zord) timeline as a sequence, and writes the cut back in that schema |
 //! | `billo.upscale.request` | queues shots (or the whole cut) for the upscale runner and returns the job rows |
+//! | `billo.beats.detect` / `billo.beats.snapCuts` | finds the kicks in a song, marks them, and rolls the picture cuts onto them |
+//! | `billo.cut.silence` | cuts the dead air out of a talking clip and closes the cut up |
 //! | `billo.assistant.run` / `.catalog` | plain-language requests routed to commands from a fixed list (no model) |
 
 use serde_json::{Value, json};
@@ -772,6 +774,176 @@ fn upscale_request(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"project": version_base(&project), "source_res": source, "target_res": target, "jobs": jobs.into_iter().map(|j| j.2).collect::<Vec<_>>()}))
 }
 
+// ------------------------------------------------------------------------------------- beats, dead air
+
+/// Most beat markers / silence cuts one command makes.
+const MAX_BEATS: usize = 2000;
+const BEAT_PREFIX: &str = "BEAT";
+
+/// A clip's own signal folded to mono, with the sequence sample rate and the clip's start.
+fn clip_mono(s: &Session, clip: ClipId, cmd: &str, max: usize) -> Result<(Vec<f32>, u32, filmcraft_time::Tick)> {
+    let seq = s.active_sequence().ok_or(EngineError::NoSequence)?;
+    let sr = seq.settings.sample_rate.max(1);
+    let it = seq
+        .audio_tracks
+        .iter()
+        .flat_map(|t| t.items.iter())
+        .find(|i| i.id == clip)
+        .ok_or_else(|| bad(cmd, "that is not an audio clip in the active sequence"))?;
+    let (a0, a1) = (it.start.to_units_floor(sr as i64), it.end().to_units_floor(sr as i64));
+    let total = usize::try_from(a1.saturating_sub(a0)).unwrap_or(0);
+    if total == 0 {
+        return Err(bad(cmd, "the clip is empty"));
+    }
+    if total > max {
+        return Err(bad(cmd, "the clip is too long; cut it down first"));
+    }
+    let provider = s.media.provider(s.project.clone(), s.services.clone());
+    let mut mono = Vec::new();
+    mono.try_reserve(total).map_err(|e| bad(cmd, format!("not enough memory: {e}")))?;
+    let mut pos = a0;
+    while pos < a1 {
+        let n = usize::try_from((a1 - pos).min(sr as i64)).unwrap_or(0).max(1);
+        let [l, r] = filmcraft_render::audio::clip_signal(it, pos, n, sr, &provider).ok_or_else(|| bad(cmd, "the clip has no audio"))?;
+        mono.extend(l.iter().zip(&r).map(|(a, b)| 0.5 * (a + b)));
+        pos = pos.saturating_add(n as i64);
+    }
+    Ok((mono, sr, it.start))
+}
+
+/// Find the hits in a song clip (kicks by default) and drop a `BEAT` marker on each.
+fn beats_detect(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "billo.beats.detect";
+    let song = song_target(s, p, cmd)?;
+    let band = match str_p(p, "band").unwrap_or("kick").to_ascii_lowercase().as_str() {
+        "kick" => filmcraft_audio_dsp::beats::Band::Kick,
+        "all" => filmcraft_audio_dsp::beats::Band::All,
+        _ => return Err(bad(cmd, "`band` must be kick or all")),
+    };
+    let (mono, sr, start) = clip_mono(s, song, cmd, filmcraft_audio_dsp::beats::MAX_SAMPLES)?;
+    let hits = filmcraft_audio_dsp::beats::onsets(&mono, sr, band);
+    let bpm = filmcraft_audio_dsp::beats::tempo(&hits, sr);
+    drop(mono);
+    let rate = s.active_sequence().ok_or(EngineError::NoSequence)?.settings.frame_rate;
+    let mut times: Vec<filmcraft_time::Tick> = hits
+        .iter()
+        .map(|h| rate.snap_nearest(filmcraft_time::Tick(start.0.saturating_add(filmcraft_time::Tick::from_units(*h as i64, sr as i64).0))))
+        .collect();
+    times.dedup();
+    let truncated = times.len() > MAX_BEATS;
+    times.truncate(MAX_BEATS);
+    if p.get("markers").and_then(Value::as_bool).unwrap_or(true) && !times.is_empty() {
+        let n0 = s.history.undo.len();
+        // replace the last pass's beat markers rather than stacking a second set
+        let seq_id = s.state.active_sequence.ok_or(EngineError::NoSequence)?;
+        let mut failed = s
+            .edit("Clear Beat Markers", |pr, _| {
+                let seq = pr.sequence_mut(seq_id).ok_or(EngineError::NoSequence)?;
+                seq.markers.retain(|m| !m.name.starts_with(BEAT_PREFIX));
+                Ok(())
+            })
+            .err();
+        for (i, t) in times.iter().enumerate() {
+            if failed.is_some() {
+                break;
+            }
+            failed = s.execute("markers.add", json!({"time": t.0, "name": format!("{BEAT_PREFIX} {}", i + 1)})).err();
+        }
+        crate::clip_ops::collapse_history(s, n0, "Mark Beats");
+        if let Some(e) = failed {
+            return Err(e);
+        }
+    }
+    Ok(json!({"song": song.0, "count": times.len(), "bpm": bpm, "truncated": truncated, "beats": times.iter().map(|t| t.seconds()).collect::<Vec<_>>()}))
+}
+
+/// Roll every cut on the picture track onto the nearest `BEAT` marker within `tolerance` frames.
+fn beats_snap_cuts(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "billo.beats.snapCuts";
+    let tolerance = p.get("tolerance").and_then(Value::as_i64).unwrap_or(6).clamp(1, 48);
+    let (cuts, beats, rate) = {
+        let seq = s.active_sequence().ok_or(EngineError::NoSequence)?;
+        let rate = seq.settings.frame_rate;
+        let beats: Vec<i64> = seq.markers.iter().filter(|m| m.name.starts_with(BEAT_PREFIX)).map(|m| rate.frame_at(m.start)).collect();
+        let track = seq.video_tracks.first().ok_or_else(|| bad(cmd, "no picture track"))?;
+        let mut items: Vec<&filmcraft_project::TrackItem> = track.items.iter().collect();
+        items.sort_by_key(|i| i.start);
+        let cuts: Vec<(ClipId, ClipId, i64)> = items
+            .windows(2)
+            .filter_map(|w| Some((w.first()?, w.get(1)?)))
+            .filter(|(a, b)| a.end() == b.start)
+            .map(|(a, b)| (a.id, b.id, rate.frame_at(b.start)))
+            .take(MAX_WALL_CLIPS)
+            .collect();
+        (cuts, beats, rate)
+    };
+    if beats.is_empty() {
+        return Err(bad(cmd, "no beat markers yet: run billo.beats.detect on the song first"));
+    }
+    let n0 = s.history.undo.len();
+    let (mut moved, mut already, mut out_of_reach, mut blocked) = (0usize, 0usize, 0usize, 0usize);
+    for (left, right, at) in &cuts {
+        let Some(delta) = beats.iter().map(|b| b - at).min_by_key(|d| d.abs()) else { continue };
+        if delta == 0 {
+            already += 1;
+        } else if delta.abs() > tolerance {
+            out_of_reach += 1;
+        } else if s.execute("timeline.roll", json!({"left": left.0, "right": right.0, "delta": rate.tick_of(delta).0})).is_ok() {
+            moved += 1;
+        } else {
+            blocked += 1;
+        }
+    }
+    crate::clip_ops::collapse_history(s, n0, "Snap Cuts to Beats");
+    let on_beat = moved + already;
+    Ok(json!({"cuts": cuts.len(), "moved": moved, "alreadyOnBeat": already, "outOfReach": out_of_reach, "blocked": blocked,
+        "onBeatPercent": on_beat.saturating_mul(100).checked_div(cuts.len()).unwrap_or(0)}))
+}
+
+/// Cut the dead air out of a talking clip: every stretch quieter than `thresholdDb` for at least
+/// `minSilence` seconds is removed from all unlocked tracks (keeping `keep` seconds of breath on
+/// each side) and the cut closes up. One undo step. `dryRun` only reports what it would remove.
+fn cut_silence(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "billo.cut.silence";
+    let clip = song_target(s, &json!({"song": p.get("clip").cloned().unwrap_or(Value::Null)}), cmd)?;
+    let threshold = p.get("thresholdDb").and_then(Value::as_f64).unwrap_or(-42.0).clamp(-90.0, -6.0) as f32;
+    let min_silence = p.get("minSilence").and_then(Value::as_f64).unwrap_or(0.7).clamp(0.2, 30.0) as f32;
+    let keep = p.get("keep").and_then(Value::as_f64).unwrap_or(0.12).clamp(0.0, 2.0);
+    let (mono, sr, start) = clip_mono(s, clip, cmd, filmcraft_audio_dsp::beats::MAX_SAMPLES)?;
+    let runs = filmcraft_audio_dsp::beats::quiet_runs(&mono, sr, threshold, min_silence);
+    drop(mono);
+    let rate = s.active_sequence().ok_or(EngineError::NoSequence)?.settings.frame_rate;
+    let pad = filmcraft_time::Tick::from_seconds_f64(keep).0;
+    let tick = |n: usize| start.0.saturating_add(filmcraft_time::Tick::from_units(n as i64, sr as i64).0);
+    let ranges: Vec<filmcraft_time::TimeRange> = runs
+        .iter()
+        .map(|(a, b)| {
+            (rate.snap_nearest(filmcraft_time::Tick(tick(*a).saturating_add(pad))), rate.snap_nearest(filmcraft_time::Tick(tick(*b).saturating_sub(pad))))
+        })
+        .filter(|(a, b)| b.0 > a.0)
+        .map(|(a, b)| filmcraft_time::TimeRange::from_bounds(a, b))
+        .take(MAX_BEATS)
+        .collect();
+    let seconds: f64 = ranges.iter().map(|r| r.duration.seconds()).sum();
+    let report: Vec<Value> = ranges.iter().map(|r| json!({"start": r.start.seconds(), "end": r.end().seconds()})).collect();
+    if ranges.is_empty() || p.get("dryRun").and_then(Value::as_bool).unwrap_or(false) {
+        return Ok(json!({"clip": clip.0, "removed": 0, "found": ranges.len(), "seconds": seconds, "ranges": report}));
+    }
+    s.edit_sequence("Cut Dead Air", |q, ctx, st| {
+        let tracks: Vec<filmcraft_project::TrackId> = q.all_tracks().map(|t| t.id).collect();
+        // last first, so earlier ranges keep their place
+        for r in ranges.iter().rev() {
+            filmcraft_edit::extract(q, &tracks, *r, ctx);
+            if st.ripple_sequence_markers {
+                crate::sequence_tools::ripple_markers(&mut q.markers, r.end(), -r.duration);
+            }
+        }
+        q.check().map_err(EngineError::Other)?;
+        Ok(())
+    })?;
+    Ok(json!({"clip": clip.0, "removed": ranges.len(), "found": ranges.len(), "seconds": seconds, "ranges": report}))
+}
+
 // ------------------------------------------------------------------------------------- assistant
 
 /// One thing the assistant understands: words that must all appear, the command, and its params.
@@ -814,6 +986,13 @@ const INTENTS: &[Intent] = &[
     Intent { words: &["vault", "transition"], id: "billo.fxVault.list", params: r#"{"category":"transitions"}"#, says: "List the transitions in the FX Vault" },
     Intent { words: &["vault", "sound"], id: "billo.fxVault.list", params: r#"{"category":"sfx"}"#, says: "List the sound effects in the FX Vault" },
     Intent { words: &["vault"], id: "billo.fxVault.list", params: "{}", says: "List the FX Vault" },
+    Intent { words: &["snap", "beat"], id: "billo.beats.snapCuts", params: "{}", says: "Roll the cuts onto the nearest beat" },
+    Intent { words: &["cut", "on", "kick"], id: "billo.beats.snapCuts", params: "{}", says: "Roll the cuts onto the nearest kick" },
+    Intent { words: &["cut", "on", "beat"], id: "billo.beats.snapCuts", params: "{}", says: "Roll the cuts onto the nearest beat" },
+    Intent { words: &["beat"], id: "billo.beats.detect", params: "{}", says: "Find the beats in the selected song and mark them" },
+    Intent { words: &["kick"], id: "billo.beats.detect", params: "{}", says: "Find the kicks in the selected song and mark them" },
+    Intent { words: &["dead", "air"], id: "billo.cut.silence", params: "{}", says: "Cut the dead air out of the selected clip" },
+    Intent { words: &["silence"], id: "billo.cut.silence", params: "{}", says: "Cut the silences out of the selected clip" },
     Intent { words: &["master", "4k"], id: "billo.upscale.request", params: r#"{"timeline":true,"target":"4k"}"#, says: "Queue the whole cut for a 4K master" },
     Intent { words: &["upscale"], id: "billo.upscale.request", params: "{}", says: "Queue the selected shots for a 4K upscale" },
     Intent { words: &["duck"], id: "essentialSound.generateDucking", params: "{}", says: "Duck the music under the dialogue" },
@@ -949,6 +1128,16 @@ pub fn commands() -> Vec<CommandSpec> {
             upscale_request,
             true,
         ),
+        spec("billo.beats.detect", "Find the Beats", r#"{"song":clipId?,"band":"kick|all"="kick","markers":bool=true}"#, has_seq, beats_detect, true),
+        spec("billo.beats.snapCuts", "Snap Cuts to the Beat", r#"{"tolerance":frames=6}"#, has_seq, beats_snap_cuts, true),
+        spec(
+            "billo.cut.silence",
+            "Cut Dead Air",
+            r#"{"clip":clipId?,"thresholdDb":f64=-42,"minSilence":seconds=0.7,"keep":seconds=0.12,"dryRun":bool=false}"#,
+            has_seq,
+            cut_silence,
+            true,
+        ),
         spec("billo.assistant.run", "Ask Billo", r#"{"text":str,"dryRun":bool=false}"#, always, assistant_run, true),
         spec("billo.assistant.catalog", "What Billo Understands", "{}", always, assistant_catalog, false),
         spec("billo.dialogue.clean", "Clean Dialogue", r#"{"clips":[id]?,"target":lufs=-16}"#, has_seq, dialogue_clean, true),
@@ -963,6 +1152,9 @@ pub fn commands() -> Vec<CommandSpec> {
         menu("billo.stems.clearSolo", "Clear Stem Solo", |s, _| stems_solo(s, &json!({}))),
         menu("billo.stems.splitSelected", "Split Song Into Stems", |s, _| stems_split(s, &json!({}))),
         menu("billo.version.saveNow", "Save Version", |s, _| version_save(s, &json!({}))),
+        menu("billo.beats.detectSelected", "Find the Beats in Song", |s, _| beats_detect(s, &json!({}))),
+        menu("billo.beats.snapAll", "Snap Cuts to the Beat", |s, _| beats_snap_cuts(s, &json!({}))),
+        menu("billo.cut.silenceSelected", "Cut Dead Air", |s, _| cut_silence(s, &json!({}))),
         menu("billo.upscale.selected4k", "Upscale Shot to 4K", |s, _| upscale_request(s, &json!({}))),
         menu("billo.upscale.master4k", "Master in 4K", |s, _| upscale_request(s, &json!({"timeline": true}))),
         menu("billo.shot.swapTakeSelected", "Swap In Selected Take", |s, _| swap_take(s, &json!({}))),

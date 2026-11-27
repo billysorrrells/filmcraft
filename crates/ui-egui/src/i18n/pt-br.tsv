@@ -3626,3 +3626,9 @@
 	Master in 4K	Masterizar em 4K
 	Upscale	Upscale de vídeo
 	Queues the job for the upscale runner. Drafts stay at 480p until the end.	Coloca o trabalho na fila do upscaler. Os rascunhos ficam em 480p até o fim.
+	Find the Beats	Achar as batidas
+	Find the Beats in Song	Achar as batidas da música
+	Snap Cuts to the Beat	Ajustar cortes à batida
+	Cut Dead Air	Cortar silêncios
+	Rhythm	Ritmo do corte
+	Mark the kicks in the song, then roll every cut onto the nearest one.	Marque os bumbos da música e depois leve cada corte ao mais próximo.

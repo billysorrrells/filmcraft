@@ -3625,3 +3625,9 @@
 	Master in 4K	Master en 4K
 	Upscale	Upscale vidéo
 	Queues the job for the upscale runner. Drafts stay at 480p until the end.	Met le travail en file pour l'upscaler. Les brouillons restent en 480p jusqu'à la fin.
+	Find the Beats	Trouver les temps
+	Find the Beats in Song	Trouver les temps du morceau
+	Snap Cuts to the Beat	Caler les coupes sur le temps
+	Cut Dead Air	Couper les blancs
+	Rhythm	Rythme
+	Mark the kicks in the song, then roll every cut onto the nearest one.	Marquez les kicks du morceau, puis calez chaque coupe sur le plus proche.
