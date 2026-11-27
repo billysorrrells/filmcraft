@@ -3620,3 +3620,43 @@
 	Clean Dialogue	ダイアログをクリーン
 	Deliver Loudness	ラウドネスで納品
 	Solo Stem	ステムをソロ
+	Split Stems	ステムを分離
+	Swap Take	テイクを差し替え
+	Save Version	バージョンを保存
+	Versions	バージョン
+	Version Payload	バージョンデータ
+	Request Regen	再生成を依頼
+	Ask Billo	Billo に頼む
+	What Billo Understands	Billo が理解できること
+	Split Song Into Stems	曲をステムに分離
+	Swap In Selected Take	選択したテイクに差し替え
+	Locked	確定
+	Real Footage	実写素材
+	Needs Regen	要再生成
+	Unmarked	未設定
+	Open a sequence to use the Billo tools.	Billo のツールを使うにはシーケンスを開いてください。
+	Shots	ショット
+	{locked} of {total} locked ({percent}%)	{total} 中 {locked} 確定（{percent}%）
+	Stems	ステム
+	Select the song, split it, then work each stem on its own track.	曲を選んで分離し、各ステムをそれぞれのトラックで編集します。
+	Solo {stem}	{stem} をソロ
+	Sound	サウンド
+	split the stems, solo vocals, mark locked…	英語で入力: split the stems, solo vocals, mark locked…
+	Go	実行
+	Not on my list yet. Try: split the stems, solo vocals, mark locked, clean dialogue.	まだ対応していません。英語で試してください: split the stems, solo vocals, mark locked, clean dialogue.
+	FX Vault	FX ボルト
+	Video FX	ビデオ FX
+	LUTs	LUT
+	Vocal Chains	ボーカルチェーン
+	Sound FX	効果音
+	in the vault	ボルト内
+	re-send needed	再送が必要
+	in a store account	ストアのアカウント内
+	licensed	ライセンス済み
+	Open Render Wall Timeline	Render Wall のタイムラインを開く
+	Render Wall Timeline	Render Wall タイムライン
+	Request Upscale	アップスケールを依頼
+	Upscale Shot to 4K	ショットを 4K にアップスケール
+	Master in 4K	4K でマスタリング
+	Upscale	アップスケール
+	Queues the job for the upscale runner. Drafts stay at 480p until the end.	アップスケール処理のキューに追加します。下書きは最後まで 480p のままです。

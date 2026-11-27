@@ -3585,3 +3585,43 @@
 	Clean Up Dialogue	Nettoyer les dialogues
 	Deliver at −14 LUFS	Livrer à −14 LUFS
 	Clear Stem Solo	Annuler le solo du stem
+	Split Stems	Séparer les stems
+	Swap Take	Changer de prise
+	Save Version	Enregistrer une version
+	Versions	Versions du montage
+	Version Payload	Données de la version
+	Request Regen	Demander une régénération
+	Ask Billo	Demander à Billo
+	What Billo Understands	Ce que Billo comprend
+	Split Song Into Stems	Séparer le morceau en stems
+	Swap In Selected Take	Utiliser la prise sélectionnée
+	Locked	Verrouillé
+	Real Footage	Images réelles
+	Needs Regen	À régénérer
+	Unmarked	Non marqué
+	Open a sequence to use the Billo tools.	Ouvrez une séquence pour utiliser les outils Billo.
+	Shots	Plans
+	{locked} of {total} locked ({percent}%)	{locked} sur {total} verrouillés ({percent} %)
+	Stems	Pistes séparées
+	Select the song, split it, then work each stem on its own track.	Sélectionnez le morceau, séparez-le, puis travaillez chaque stem sur sa piste.
+	Solo {stem}	Solo : {stem}
+	Sound	Son
+	split the stems, solo vocals, mark locked…	En anglais : split the stems, solo vocals, mark locked…
+	Go	OK
+	Not on my list yet. Try: split the stems, solo vocals, mark locked, clean dialogue.	Pas encore dans ma liste. Essayez en anglais : split the stems, solo vocals, mark locked, clean dialogue.
+	FX Vault	Coffre FX
+	Video FX	Effets vidéo
+	LUTs	Tables LUT
+	Vocal Chains	Chaînes vocales
+	Sound FX	Effets sonores
+	in the vault	dans le coffre
+	re-send needed	renvoi nécessaire
+	in a store account	dans un compte boutique
+	licensed	sous licence
+	Open Render Wall Timeline	Ouvrir la timeline du Render Wall
+	Render Wall Timeline	Timeline du Render Wall
+	Request Upscale	Demander un upscale
+	Upscale Shot to 4K	Upscaler le plan en 4K
+	Master in 4K	Master en 4K
+	Upscale	Upscale vidéo
+	Queues the job for the upscale runner. Drafts stay at 480p until the end.	Met le travail en file pour l'upscaler. Les brouillons restent en 480p jusqu'à la fin.

@@ -3583,3 +3583,43 @@
 	Clean Up Dialogue	Bersihkan dialog
 	Deliver at −14 LUFS	Kirim pada −14 LUFS
 	Clear Stem Solo	Hapus solo stem
+	Split Stems	Pisahkan stem
+	Swap Take	Tukar take
+	Save Version	Simpan versi
+	Versions	Versi
+	Version Payload	Data versi
+	Request Regen	Minta pembuatan ulang
+	Ask Billo	Tanya Billo
+	What Billo Understands	Yang dipahami Billo
+	Split Song Into Stems	Pisahkan lagu menjadi stem
+	Swap In Selected Take	Pakai take terpilih
+	Locked	Terkunci
+	Real Footage	Rekaman asli
+	Needs Regen	Perlu dibuat ulang
+	Unmarked	Belum ditandai
+	Open a sequence to use the Billo tools.	Buka sekuens untuk memakai alat Billo.
+	Shots	Shot
+	{locked} of {total} locked ({percent}%)	{locked} dari {total} terkunci ({percent}%)
+	Stems	Stem lagu
+	Select the song, split it, then work each stem on its own track.	Pilih lagu, pisahkan, lalu kerjakan tiap stem di treknya sendiri.
+	Solo {stem}	Solo: {stem}
+	Sound	Suara
+	split the stems, solo vocals, mark locked…	Dalam bahasa Inggris: split the stems, solo vocals, mark locked…
+	Go	Jalankan
+	Not on my list yet. Try: split the stems, solo vocals, mark locked, clean dialogue.	Belum ada di daftar saya. Coba dalam bahasa Inggris: split the stems, solo vocals, mark locked, clean dialogue.
+	FX Vault	Brankas FX
+	Video FX	Efek video
+	LUTs	LUT warna
+	Vocal Chains	Rantai vokal
+	Sound FX	Efek suara
+	in the vault	di brankas
+	re-send needed	perlu dikirim ulang
+	in a store account	di akun toko
+	licensed	berlisensi
+	Open Render Wall Timeline	Buka timeline Render Wall
+	Render Wall Timeline	Timeline Render Wall
+	Request Upscale	Minta upscale
+	Upscale Shot to 4K	Upscale shot ke 4K
+	Master in 4K	Master dalam 4K
+	Upscale	Upscale video
+	Queues the job for the upscale runner. Drafts stay at 480p until the end.	Mengantrekan pekerjaan untuk upscaler. Draf tetap 480p sampai akhir.

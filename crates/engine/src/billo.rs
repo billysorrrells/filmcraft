@@ -17,6 +17,8 @@
 //! | `billo.shot.swapTake` | swaps another take into a shot's slot and flags it for review |
 //! | `billo.version.save` / `.list` / `.payload` | keeps numbered copies of the cut; `.payload` is the row Billo OS stores |
 //! | `billo.regen.request` | flags shots for a regen and returns the generator ticket (480p drafts) |
+//! | `billo.wall.open` / `billo.wall.timeline` | opens a Render Wall (Billo Zord) timeline as a sequence, and writes the cut back in that schema |
+//! | `billo.upscale.request` | queues shots (or the whole cut) for the upscale runner and returns the job rows |
 //! | `billo.assistant.run` / `.catalog` | plain-language requests routed to commands from a fixed list (no model) |
 
 use serde_json::{Value, json};
@@ -42,7 +44,8 @@ fn status_label(name: &str) -> Option<Label> {
     STATUSES.iter().find(|(n, _)| *n == k).map(|(_, l)| *l)
 }
 
-fn label_status(l: Label) -> Option<&'static str> {
+/// The shot status a clip label stands for, if any.
+pub fn label_status(l: Label) -> Option<&'static str> {
     STATUSES.iter().find(|(_, x)| *x == l).map(|(n, _)| *n)
 }
 
@@ -270,9 +273,14 @@ fn wall_package(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"dir": dir, "files": written}))
 }
 
+/// The FX Vault catalogue (parsed once).
+pub fn fx_vault() -> &'static [Value] {
+    static ITEMS: std::sync::OnceLock<Vec<Value>> = std::sync::OnceLock::new();
+    ITEMS.get_or_init(|| serde_json::from_str(FX_VAULT).unwrap_or_default())
+}
+
 fn fx_vault_list(_s: &mut Session, p: &Value) -> Result<Value> {
-    let cmd = "billo.fxVault.list";
-    let all: Vec<Value> = serde_json::from_str(FX_VAULT).map_err(|e| bad(cmd, e.to_string()))?;
+    let all: Vec<Value> = fx_vault().to_vec();
     let cat = str_p(p, "category").map(str::to_ascii_lowercase);
     let st = str_p(p, "status").map(str::to_ascii_lowercase);
     let items: Vec<Value> = all
@@ -396,11 +404,12 @@ fn sequence_name(s: &Session) -> Result<(filmcraft_project::ItemId, String)> {
 }
 
 /// The name a version is filed under: the part before ` · v<N>`.
-fn version_base(name: &str) -> &str {
+pub fn version_base(name: &str) -> &str {
     name.rsplit_once(" · v").filter(|(_, tail)| tail.chars().next().is_some_and(|c| c.is_ascii_digit())).map_or(name, |(base, _)| base)
 }
 
-fn versions_of(s: &Session, base: &str) -> Vec<(u64, String, u32)> {
+/// Saved versions of the cut named `base`: (sequence id, name, number), oldest first.
+pub fn versions_of(s: &Session, base: &str) -> Vec<(u64, String, u32)> {
     let prefix = format!("{base} · v");
     let mut v: Vec<(u64, String, u32)> = s
         .project
@@ -502,6 +511,267 @@ fn regen_request(s: &mut Session, p: &Value) -> Result<Value> {
     Ok(json!({"tickets": tickets}))
 }
 
+// ------------------------------------------------------------------------------------- Render Wall timelines
+
+/// Most clips / tracks a Render Wall timeline may carry.
+const MAX_WALL_CLIPS: usize = 5000;
+const MAX_WALL_AUDIO: usize = 16;
+
+fn wall_status(label: &str) -> Option<&'static str> {
+    let l = label.to_ascii_lowercase();
+    if l.contains("regen") {
+        Some("regen")
+    } else if l.contains("lock") {
+        Some("locked")
+    } else if l.contains("review") {
+        Some("review")
+    } else if l.contains("real") {
+        Some("real")
+    } else {
+        None
+    }
+}
+
+fn frames_of(v: &Value, key: &str) -> i64 {
+    v.get(key).and_then(Value::as_f64).filter(|f| f.is_finite()).map_or(0, |f| f.clamp(0.0, 100_000_000.0) as i64)
+}
+
+/// Open a Render Wall (Billo Zord) timeline, schema `billo-timeline/1`, as a new sequence: the
+/// picture track's clips at their frames with their source offsets, each audio track (record and
+/// stems) on its own named track with the stems muted, and the status lane painted from the
+/// timeline's status track. `items` maps the timeline's bin keys (and `track:<id>` for audio
+/// tracks) to imported project items; clips whose media is not there are left as gaps and listed.
+fn wall_open(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "billo.wall.open";
+    let tl = p.get("timeline").filter(|t| t.is_object()).ok_or_else(|| bad(cmd, "need `timeline`: a billo-timeline/1 object"))?;
+    let tracks = tl.get("tracks").and_then(Value::as_array).ok_or_else(|| bad(cmd, "the timeline has no tracks"))?;
+    let item_of = |key: &str| p.get("items").and_then(|m| m.get(key)).and_then(Value::as_u64);
+    let fps = tl.get("fps").and_then(Value::as_f64).filter(|f| f.is_finite()).unwrap_or(24.0).clamp(1.0, 240.0);
+    let size = |i: usize, d: u64| tl.get("canvas").and_then(|c| c.get(i)).and_then(Value::as_u64).unwrap_or(d).clamp(16, 8192);
+    let title: String = tl.get("title").or_else(|| tl.get("slug")).and_then(Value::as_str).unwrap_or("Render Wall Timeline").chars().take(120).collect();
+    let audio: Vec<&Value> = tracks.iter().filter(|t| t["kind"] == "audio").take(MAX_WALL_AUDIO).collect();
+    let picture = tracks.iter().find(|t| t["kind"] == "video" && t.get("clips").is_some_and(Value::is_array));
+    let status_track =
+        tracks.iter().find(|t| t["kind"] != "video" && t["kind"] != "audio" && t["name"].as_str().is_some_and(|n| n.to_ascii_lowercase().contains("status")));
+
+    let n0 = s.history.undo.len();
+    let run = |s: &mut Session| -> Result<Value> {
+        let made = s.execute(
+            "file.newSequence",
+            json!({"name": title, "width": size(0, 1920), "height": size(1, 1080), "fps": fps, "video": 1, "audio": audio.len().max(1)}),
+        )?;
+        let seq_id = s.state.active_sequence.ok_or(EngineError::NoSequence)?;
+        let rate = s.active_sequence().ok_or(EngineError::NoSequence)?.settings.frame_rate;
+        let (mut placed, mut skipped) = (0usize, Vec::new());
+        let mut blocks: Vec<(i64, i64, Label)> = Vec::new();
+        for c in picture.and_then(|t| t["clips"].as_array()).map(|c| c.as_slice()).unwrap_or_default().iter().take(MAX_WALL_CLIPS) {
+            let (f0, n) = (frames_of(c, "f0"), frames_of(c, "n"));
+            let src = c["src"].as_str().unwrap_or_default();
+            if n == 0 || src == "black" {
+                continue;
+            }
+            let Some(item) = item_of(src) else {
+                skipped.push(json!(src));
+                continue;
+            };
+            let source_in = filmcraft_time::Tick::from_seconds_f64(c["ss"].as_f64().filter(|v| v.is_finite()).unwrap_or(0.0).clamp(0.0, 360_000.0));
+            let (at, len) = (rate.tick_of(f0), rate.tick_of(f0.saturating_add(n)).0.saturating_sub(rate.tick_of(f0).0));
+            s.execute(
+                "timeline.place",
+                json!({"item": item, "track": "V1", "time": at.0, "sourceIn": source_in.0, "duration": len, "video": true, "audio": false}),
+            )?;
+            let clip = s.active_sequence().and_then(|q| q.video_tracks.first()).and_then(|t| t.items.iter().find(|i| i.start == at)).map(|i| i.id);
+            if let (Some(clip), Some(label)) = (clip, c["label"].as_str().filter(|l| !l.is_empty())) {
+                let name: String = label.chars().take(120).collect();
+                s.execute("clip.rename", json!({"clip": clip.0, "name": name}))?;
+            }
+            placed += 1;
+        }
+        // the status lane: each status block paints the picture clips that start inside it
+        for g in status_track.and_then(|t| t["clips"].as_array()).map(|c| c.as_slice()).unwrap_or_default().iter().take(MAX_WALL_CLIPS) {
+            if let Some(label) = g["label"].as_str().and_then(wall_status).and_then(status_label) {
+                blocks.push((frames_of(g, "f0"), frames_of(g, "f0").saturating_add(frames_of(g, "n")), label));
+            }
+        }
+        if !blocks.is_empty() {
+            s.edit("Paint Shot Status", |pr, _| {
+                let seq = pr.sequence_mut(seq_id).ok_or(EngineError::NoSequence)?;
+                for it in seq.video_tracks.iter_mut().flat_map(|t| t.items.iter_mut()) {
+                    let f = rate.frame_at(it.start);
+                    if let Some(b) = blocks.iter().find(|b| f >= b.0 && f < b.1) {
+                        it.label = b.2;
+                    }
+                }
+                Ok(())
+            })?;
+        }
+        let mut audio_tracks = Vec::new();
+        for (i, t) in audio.iter().enumerate() {
+            let id = t["id"].as_str().unwrap_or_default();
+            let lane = format!("A{}", i + 1);
+            let name: String = t["name"].as_str().unwrap_or(id).chars().take(40).collect();
+            let has_media = match item_of(&format!("track:{id}")) {
+                Some(item) => {
+                    s.execute("timeline.place", json!({"item": item, "audioTrack": lane, "time": 0, "video": false, "audio": true}))?;
+                    true
+                }
+                None => {
+                    skipped.push(json!(format!("track:{id}")));
+                    false
+                }
+            };
+            // the record plays; its stems sit muted beside it, ready to solo
+            s.execute("timeline.setTrack", json!({"track": lane, "name": name, "muted": i > 0}))?;
+            audio_tracks.push(json!({"track": lane, "name": name, "media": has_media}));
+        }
+        Ok(json!({"sequence": made["sequence"], "name": title, "fps": fps, "placed": placed, "skipped": skipped, "audioTracks": audio_tracks}))
+    };
+    let r = run(s);
+    crate::clip_ops::collapse_history(s, n0, "Open Render Wall Timeline");
+    r
+}
+
+/// The Render Wall timeline for the cut as it stands: `base` (the timeline that was opened) with
+/// its picture track rebuilt from the active sequence's V1 (gaps become black, each clip carries
+/// its status), ready to save back as the next version. Clips whose media is not in the
+/// timeline's bin cannot be written; they become black and are listed in `unmapped`.
+fn wall_timeline(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "billo.wall.timeline";
+    let mut tl = p.get("base").filter(|t| t.is_object()).cloned().ok_or_else(|| bad(cmd, "need `base`: the timeline that was opened"))?;
+    let keys: Vec<(u64, String)> = p
+        .get("items")
+        .and_then(Value::as_object)
+        .map(|m| m.iter().filter(|(k, _)| !k.starts_with("track:")).filter_map(|(k, v)| Some((v.as_u64()?, k.clone()))).collect())
+        .unwrap_or_default();
+    let old: Vec<Value> =
+        tl["tracks"].as_array().and_then(|t| t.iter().find(|t| t["kind"] == "video")).and_then(|t| t["clips"].as_array()).cloned().unwrap_or_default();
+    let mut used = vec![false; old.len()];
+    let (clips, unmapped, frames) = {
+        let seq = s.active_sequence().ok_or(EngineError::NoSequence)?;
+        let rate = seq.settings.frame_rate;
+        let mut items: Vec<&filmcraft_project::TrackItem> = seq.video_tracks.first().map(|t| t.items.iter().collect()).unwrap_or_default();
+        items.sort_by_key(|i| i.start);
+        let (mut out, mut unmapped, mut cursor, mut gaps) = (Vec::new(), Vec::new(), 0i64, 0usize);
+        let black = |f0: i64, n: i64, k: usize| json!({"id": format!("g{k}"), "src": "black", "ss": 0.0, "n": n, "f0": f0, "label": "Black", "lut": null});
+        for it in items.into_iter().take(MAX_WALL_CLIPS) {
+            let f0 = rate.frame_at(it.start).max(cursor);
+            let n = rate.frame_at(it.end()).saturating_sub(f0);
+            if n <= 0 {
+                continue;
+            }
+            if f0 > cursor {
+                gaps += 1;
+                out.push(black(cursor, f0 - cursor, gaps));
+            }
+            match keys.iter().find(|(id, _)| *id == it.item.0) {
+                Some((_, src)) => {
+                    let prior = old
+                        .iter()
+                        .enumerate()
+                        .find(|(i, c)| !used.get(*i).copied().unwrap_or(true) && c["src"] == src.as_str() && c["label"] == it.name.as_str());
+                    let mut clip = match prior {
+                        Some((i, c)) => {
+                            if let Some(u) = used.get_mut(i) {
+                                *u = true;
+                            }
+                            c.clone()
+                        }
+                        None => json!({"id": format!("c{}", it.id.0), "lut": null}),
+                    };
+                    clip["src"] = json!(src);
+                    clip["ss"] = json!((it.source_in.seconds() * 1000.0).round() / 1000.0);
+                    clip["n"] = json!(n);
+                    clip["f0"] = json!(f0);
+                    clip["label"] = json!(it.name);
+                    clip["status"] = json!(label_status(it.label));
+                    out.push(clip);
+                }
+                None => {
+                    gaps += 1;
+                    unmapped.push(json!(it.name));
+                    out.push(black(f0, n, gaps));
+                }
+            }
+            cursor = f0.saturating_add(n);
+        }
+        (out, unmapped, cursor)
+    };
+    let fps = tl["fps"].as_f64().filter(|f| f.is_finite() && *f > 0.0).unwrap_or(24.0);
+    let video = tl["tracks"].as_array_mut().and_then(|t| t.iter_mut().find(|t| t["kind"] == "video")).ok_or_else(|| bad(cmd, "`base` has no picture track"))?;
+    video["clips"] = Value::Array(clips);
+    tl["frames"] = json!(frames);
+    tl["duration"] = json!(frames as f64 / fps);
+    tl["editor"] = json!("Billo Cut");
+    Ok(json!({"timeline": tl, "unmapped": unmapped, "frames": frames}))
+}
+
+// ------------------------------------------------------------------------------------- upscale
+
+/// Queue clips (or the whole cut) for the upscale runner: returns the job rows Billo OS stores
+/// (`os.upscale_jobs`) and marks each shot. The editor does not run the upscale; the runner does,
+/// in two 2x passes with a face check between them, and hands back a proxy.
+fn upscale_request(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "billo.upscale.request";
+    let target = match str_p(p, "target").unwrap_or("4k").to_ascii_lowercase().as_str() {
+        "960p" => "960p",
+        "1920p" | "1080p" => "1920p",
+        "4k" | "2160p" => "4k",
+        _ => return Err(bad(cmd, "`target` must be 960p, 1920p or 4k")),
+    };
+    let tag = match str_p(p, "tag").unwrap_or("ai_gen").to_ascii_lowercase().as_str() {
+        "ai_gen" => "ai_gen",
+        "real" | "real_footage" | "stage" => "real_footage",
+        "bulk" => "bulk",
+        "anime" => "anime",
+        _ => return Err(bad(cmd, "`tag` must be ai_gen, real, bulk or anime")),
+    };
+    let engine: String = str_p(p, "engine").unwrap_or("auto").chars().take(40).collect();
+    let whole = p.get("timeline").and_then(Value::as_bool).unwrap_or(false);
+    let clips = clip_targets(s, p);
+    let (project, source, jobs) = {
+        let (_, project) = sequence_name(s)?;
+        let seq = s.active_sequence().ok_or(EngineError::NoSequence)?;
+        let source = format!("{}x{}", seq.settings.width, seq.settings.height);
+        let jobs: Vec<(i64, String, Value)> = seq
+            .video_tracks
+            .iter()
+            .flat_map(|t| t.items.iter())
+            .filter(|i| whole || clips.contains(&i.id))
+            .take(MAX_WALL_CLIPS)
+            .map(|i| {
+                let job = json!({
+                    "take_ref": i.name, "clip": i.id.0, "project": version_base(&project), "source_res": source, "target_res": target, "tag": tag, "engine_id": engine,
+                    "passes": [{"scale": 2}, {"qc": "face-lock"}, {"scale": 2}], "status": "queued",
+                    "startSeconds": i.start.seconds(), "durationSeconds": i.duration.seconds(),
+                });
+                (i.start.0, i.name.clone(), job)
+            })
+            .collect();
+        (project, source, jobs)
+    };
+    if jobs.is_empty() {
+        return Err(bad(cmd, "select the shots to upscale (or pass `timeline: true` for the whole cut)"));
+    }
+    let n0 = s.history.undo.len();
+    let mut marked: Vec<i64> = Vec::new();
+    let mut failed = None;
+    for (at, name, _) in &jobs {
+        if marked.contains(at) {
+            continue;
+        }
+        marked.push(*at);
+        if let Err(e) = s.execute("markers.add", json!({"time": at, "name": format!("UPSCALE to {}: {name}", target.to_ascii_uppercase())})) {
+            failed = Some(e);
+            break;
+        }
+    }
+    crate::clip_ops::collapse_history(s, n0, "Request Upscale");
+    if let Some(e) = failed {
+        return Err(e);
+    }
+    Ok(json!({"project": version_base(&project), "source_res": source, "target_res": target, "jobs": jobs.into_iter().map(|j| j.2).collect::<Vec<_>>()}))
+}
+
 // ------------------------------------------------------------------------------------- assistant
 
 /// One thing the assistant understands: words that must all appear, the command, and its params.
@@ -544,6 +814,8 @@ const INTENTS: &[Intent] = &[
     Intent { words: &["vault", "transition"], id: "billo.fxVault.list", params: r#"{"category":"transitions"}"#, says: "List the transitions in the FX Vault" },
     Intent { words: &["vault", "sound"], id: "billo.fxVault.list", params: r#"{"category":"sfx"}"#, says: "List the sound effects in the FX Vault" },
     Intent { words: &["vault"], id: "billo.fxVault.list", params: "{}", says: "List the FX Vault" },
+    Intent { words: &["master", "4k"], id: "billo.upscale.request", params: r#"{"timeline":true,"target":"4k"}"#, says: "Queue the whole cut for a 4K master" },
+    Intent { words: &["upscale"], id: "billo.upscale.request", params: "{}", says: "Queue the selected shots for a 4K upscale" },
     Intent { words: &["duck"], id: "essentialSound.generateDucking", params: "{}", says: "Duck the music under the dialogue" },
     Intent { words: &["remove", "pause"], id: "transcript.removePauses", params: "{}", says: "Cut the pauses out of the transcript" },
     Intent { words: &["remove", "filler"], id: "transcript.removeFillers", params: "{}", says: "Cut the filler words out of the transcript" },
@@ -667,6 +939,16 @@ pub fn commands() -> Vec<CommandSpec> {
         spec("billo.version.list", "Versions", "{}", has_seq, version_list, false),
         spec("billo.version.payload", "Version Payload", r#"{"label":str?}"#, has_seq, version_payload, false),
         spec("billo.regen.request", "Request Regen", r#"{"clips":[id]?,"prompt":str}"#, has_seq, regen_request, true),
+        spec("billo.wall.open", "Open Render Wall Timeline", r#"{"timeline":billo-timeline/1,"items":{binKey|"track:<id>":itemId}}"#, always, wall_open, true),
+        spec("billo.wall.timeline", "Render Wall Timeline", r#"{"base":billo-timeline/1,"items":{binKey:itemId}}"#, has_seq, wall_timeline, false),
+        spec(
+            "billo.upscale.request",
+            "Request Upscale",
+            r#"{"clips":[id]?,"timeline":bool=false,"target":"960p|1920p|4k"="4k","tag":"ai_gen|real|bulk|anime"="ai_gen","engine":str="auto"}"#,
+            has_seq,
+            upscale_request,
+            true,
+        ),
         spec("billo.assistant.run", "Ask Billo", r#"{"text":str,"dryRun":bool=false}"#, always, assistant_run, true),
         spec("billo.assistant.catalog", "What Billo Understands", "{}", always, assistant_catalog, false),
         spec("billo.dialogue.clean", "Clean Dialogue", r#"{"clips":[id]?,"target":lufs=-16}"#, has_seq, dialogue_clean, true),
@@ -681,6 +963,8 @@ pub fn commands() -> Vec<CommandSpec> {
         menu("billo.stems.clearSolo", "Clear Stem Solo", |s, _| stems_solo(s, &json!({}))),
         menu("billo.stems.splitSelected", "Split Song Into Stems", |s, _| stems_split(s, &json!({}))),
         menu("billo.version.saveNow", "Save Version", |s, _| version_save(s, &json!({}))),
+        menu("billo.upscale.selected4k", "Upscale Shot to 4K", |s, _| upscale_request(s, &json!({}))),
+        menu("billo.upscale.master4k", "Master in 4K", |s, _| upscale_request(s, &json!({"timeline": true}))),
         menu("billo.shot.swapTakeSelected", "Swap In Selected Take", |s, _| swap_take(s, &json!({}))),
         spec(
             "billo.fxVault.list",
