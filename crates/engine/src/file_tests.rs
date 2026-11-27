@@ -115,3 +115,49 @@ fn open_demo_project_clears_saved_path_so_save_does_not_overwrite() {
     );
     let _ = std::fs::remove_dir_all(&d);
 }
+
+/// File ▸ Open on a Premiere `.prproj`: a new unsaved project with its bins, media and sequence, and
+/// the sequence opens in the timeline. Saving writes a `.fcproj`, never the `.prproj`.
+#[test]
+fn premiere_project_opens_as_a_new_unsaved_project() {
+    const PRPROJ: &str = r#"<?xml version="1.0" encoding="UTF-8" ?>
+<PremiereData Version="3">
+  <RootProjectItem ObjectUID="root"><ProjectItem><Name>Root Bin</Name></ProjectItem>
+    <ProjectItemContainer><Items><Item Index="0" ObjectURef="bin1"/><Item Index="1" ObjectURef="seqitem"/></Items></ProjectItemContainer>
+  </RootProjectItem>
+  <BinProjectItem ObjectUID="bin1"><ProjectItem><Name>Footage</Name></ProjectItem>
+    <ProjectItemContainer><Items><Item Index="0" ObjectURef="clipitem"/></Items></ProjectItemContainer>
+  </BinProjectItem>
+  <ClipProjectItem ObjectUID="clipitem"><ProjectItem><Name>Take 1</Name></ProjectItem><MasterClip ObjectURef="mc1"/></ClipProjectItem>
+  <MasterClip ObjectUID="mc1"><Clips><Clip Index="0" ObjectRef="10"/></Clips></MasterClip>
+  <VideoClip ObjectID="10"><Clip><Source ObjectRef="11"/><InPoint>0</InPoint></Clip></VideoClip>
+  <VideoMediaSource ObjectID="11"><MediaSource><Media ObjectURef="m1"/></MediaSource></VideoMediaSource>
+  <Media ObjectUID="m1"><VideoStream ObjectRef="12"/><FilePath>/nowhere/take1.mov</FilePath><Title>take1.mov</Title></Media>
+  <VideoStream ObjectID="12"><FrameRate>10584000000</FrameRate><FrameRect>0,0,1280,720</FrameRect><Duration>2540160000000</Duration></VideoStream>
+  <ClipProjectItem ObjectUID="seqitem"><ProjectItem><Name>Edit 1</Name></ProjectItem><MasterClip ObjectURef="mc2"/></ClipProjectItem>
+  <MasterClip ObjectUID="mc2"><Clips><Clip Index="0" ObjectRef="20"/></Clips></MasterClip>
+  <VideoClip ObjectID="20"><Clip><Source ObjectRef="21"/></Clip></VideoClip>
+  <VideoSequenceSource ObjectID="21"><SequenceSource><Sequence ObjectURef="s1"/></SequenceSource></VideoSequenceSource>
+  <Sequence ObjectUID="s1"><TrackGroups>
+    <TrackGroup Index="0"><First>228cda18-3625-4d2d-951e-348879e4ed93</First><Second ObjectRef="30"/></TrackGroup>
+  </TrackGroups><Name>Edit 1</Name></Sequence>
+  <VideoTrackGroup ObjectID="30"><TrackGroup><Tracks><Track Index="0" ObjectURef="t1"/></Tracks><FrameRate>10584000000</FrameRate></TrackGroup><FrameRect>0,0,1280,720</FrameRect></VideoTrackGroup>
+  <VideoClipTrack ObjectUID="t1"><ClipTrack><Track><IsLocked>false</IsLocked></Track><ClipItems><TrackItems><TrackItem Index="0" ObjectRef="40"/></TrackItems></ClipItems></ClipTrack></VideoClipTrack>
+  <VideoClipTrackItem ObjectID="40"><ClipTrackItem><TrackItem><Start>0</Start><End>508032000000</End></TrackItem><SubClip ObjectRef="41"/></ClipTrackItem></VideoClipTrackItem>
+  <SubClip ObjectID="41"><Clip ObjectRef="42"/><MasterClip ObjectURef="mc1"/><Name>Take 1</Name></SubClip>
+  <VideoClip ObjectID="42"><Clip><Source ObjectRef="11"/><InPoint>0</InPoint></Clip></VideoClip>
+</PremiereData>"#;
+    let d = temp_dir("prproj");
+    let path = d.join("Show Edit.prproj").to_string_lossy().to_string();
+    std::fs::write(&path, PRPROJ).unwrap();
+    let mut s = Session::default();
+    let r = s.execute("file.open", json!({"path": path})).unwrap();
+    assert_eq!(r["premiere"], true);
+    assert_eq!(s.project.name, "Show Edit");
+    assert!(s.path.is_none(), "the .prproj is never the save target");
+    let seqs: Vec<_> = s.project.items.values().filter(|i| i.as_sequence().is_some()).collect();
+    assert_eq!(seqs.len(), 1);
+    let seq = seqs[0].as_sequence().unwrap();
+    assert_eq!(seq.tracks(filmcraft_project::TrackKind::Video)[0].items.len(), 1);
+    let _ = std::fs::remove_dir_all(&d);
+}

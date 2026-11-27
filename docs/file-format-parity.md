@@ -13,7 +13,7 @@ only). "Tested" names the evidence.
 
 | Format | Premiere | Read | Write | Tested | % |
 |---|---|---|---|---|---|
-| **Premiere project `.prproj`** | native | **no** | **no** | — | **0%** ([G2](gaps.md#g2-premieres-prproj-cannot-be-opened)) |
+| **Premiere project `.prproj`** | native | **partial** (bins, media, sequences, tracks, clips) | **no** | — | **~35%** ([G2](gaps.md#g2-premieres-prproj-cannot-be-opened)) |
 | Our project `.fcproj` | — | yes, schema migrations | yes, atomic, auto-save, recovery journal | migration tests | — |
 | FCP7 XML (`xmeml`) | read + write | yes | yes | round-trip tests; Premiere-exported XML slow (#461) | 75% |
 | FCPXML | read (via XtoCC) | yes | yes | round-trip tests | 80% |

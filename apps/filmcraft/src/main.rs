@@ -327,7 +327,8 @@ fn app_creator(launch: Launch, graphics: graphics::GraphicsStart, created: Arc<A
         }));
         app.hooks.pick_open_project = Some(Box::new(|| {
             rfd::FileDialog::new()
-                .add_filter(filmcraft_ui_egui::i18n::t("FilmCraft Project"), &file_filters::extensions(&["fcproj"]))
+                .add_filter(filmcraft_ui_egui::i18n::t("FilmCraft Project"), &file_filters::extensions(&["fcproj", "prproj"]))
+                .add_filter(filmcraft_ui_egui::i18n::t("Premiere Pro Project"), &file_filters::extensions(&["prproj"]))
                 .pick_file()
                 .map(|p| p.to_string_lossy().to_string())
         }));
